@@ -34,3 +34,10 @@ class FirestoreRecordsRepository:
         self.collection.document(record_id).set(payload)
         payload["id"] = record_id
         return payload
+
+    def migrate_user_phone(self, old_phone: str, new_phone: str) -> None:
+        """Migrate all triage records from an old phone number to a new one."""
+        query = self.collection.where("phone_number", "==", old_phone)
+        for doc in query.stream():
+            self.collection.document(doc.id).update({"phone_number": new_phone})
+

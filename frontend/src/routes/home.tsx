@@ -11,7 +11,6 @@ import {
   Languages,
   ChevronRight,
   Loader2,
-  LogOut,
 } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
 import { SosButton } from "@/components/sos-button";
@@ -27,9 +26,9 @@ export const Route = createFileRoute("/home")({
 function HomePage() {
   const { language, setLanguage } = useLanguage();
   const navigate = useNavigate();
-  const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const { t } = useTranslation();
-  
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       navigate({ to: "/login" });
@@ -45,16 +44,6 @@ function HomePage() {
     toast(`Language: ${next.native}`);
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      toast.success("Logged out successfully");
-      navigate({ to: "/login" });
-    } catch {
-      toast.error("Failed to log out");
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background">
@@ -68,10 +57,34 @@ function HomePage() {
   }
 
   const tiles = [
-    { label: "Find Hospital", translationKey: "find_hospital" as const, icon: Hospital, tone: "primary" as const, to: "/hospitals" as const },
-    { label: "Pharmacies", translationKey: "pharmacies_tile" as const, icon: Pill, tone: "secondary" as const, to: "/pharmacies" as const },
-    { label: "Govt Schemes", translationKey: "govt_schemes" as const, icon: FileText, tone: "primary" as const, to: "/schemes" as const },
-    { label: "My Records", translationKey: "my_records" as const, icon: FolderHeart, tone: "secondary" as const, to: "/records" as const },
+    {
+      label: "Find Hospital",
+      translationKey: "find_hospital" as const,
+      icon: Hospital,
+      tone: "primary" as const,
+      to: "/hospitals" as const,
+    },
+    {
+      label: "Pharmacies",
+      translationKey: "pharmacies_tile" as const,
+      icon: Pill,
+      tone: "secondary" as const,
+      to: "/pharmacies" as const,
+    },
+    {
+      label: "Govt Schemes",
+      translationKey: "govt_schemes" as const,
+      icon: FileText,
+      tone: "primary" as const,
+      to: "/schemes" as const,
+    },
+    {
+      label: "My Records",
+      translationKey: "my_records" as const,
+      icon: FolderHeart,
+      tone: "secondary" as const,
+      to: "/records" as const,
+    },
   ];
 
   return (
@@ -79,8 +92,8 @@ function HomePage() {
       <div className="mx-auto w-full max-w-md px-5 pt-4">
         {/* Sticky header */}
         <header className="flex items-center justify-between">
-          <button
-            type="button"
+          <Link
+            to="/profile"
             className="flex items-center gap-3 rounded-2xl p-1 pr-3 active:bg-muted"
           >
             <span className="grid h-11 w-11 place-items-center rounded-full bg-primary text-primary-foreground">
@@ -89,10 +102,10 @@ function HomePage() {
             <span className="text-left">
               <span className="block text-xs text-muted-foreground">{t("welcome")}</span>
               <span className="block text-sm font-bold text-foreground">
-                {user?.full_name || "My Profile"}
+                {user?.name || user?.full_name || "My Profile"}
               </span>
             </span>
-          </button>
+          </Link>
 
           <div className="flex items-center gap-2">
             <button
@@ -103,15 +116,6 @@ function HomePage() {
             >
               <Languages className="h-4 w-4 text-primary" />
               <span>{current.native}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="flex h-[38px] w-[38px] items-center justify-center rounded-full border-2 border-border bg-card text-destructive active:bg-muted active:scale-95 transition-all"
-              aria-label="Log out"
-            >
-              <LogOut className="h-4 w-4" />
             </button>
           </div>
         </header>
@@ -130,9 +134,7 @@ function HomePage() {
                 {t("ai_triage")}
               </p>
               <h2 className="mt-1 text-2xl font-black leading-tight">{t("check_symptoms")}</h2>
-              <p className="mt-1 text-sm text-primary-foreground/80">
-                {t("speak_or_scan")}
-              </p>
+              <p className="mt-1 text-sm text-primary-foreground/80">{t("speak_or_scan")}</p>
             </div>
             <ChevronRight className="h-6 w-6 text-primary-foreground/60" />
           </div>

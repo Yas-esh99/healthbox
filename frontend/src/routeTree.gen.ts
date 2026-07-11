@@ -16,6 +16,7 @@ import { Route as SymptomsRouteImport } from './routes/symptoms'
 import { Route as SchemesRouteImport } from './routes/schemes'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as RecordsRouteImport } from './routes/records'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as PharmaciesRouteImport } from './routes/pharmacies'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LanguageRouteImport } from './routes/language'
@@ -58,6 +59,11 @@ const RegisterRoute = RegisterRouteImport.update({
 const RecordsRoute = RecordsRouteImport.update({
   id: '/records',
   path: '/records',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PharmaciesRoute = PharmaciesRouteImport.update({
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/language': typeof LanguageRoute
   '/login': typeof LoginRoute
   '/pharmacies': typeof PharmaciesRoute
+  '/profile': typeof ProfileRoute
   '/records': typeof RecordsRoute
   '/register': typeof RegisterRoute
   '/schemes': typeof SchemesRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/language': typeof LanguageRoute
   '/login': typeof LoginRoute
   '/pharmacies': typeof PharmaciesRoute
+  '/profile': typeof ProfileRoute
   '/records': typeof RecordsRoute
   '/register': typeof RegisterRoute
   '/schemes': typeof SchemesRoute
@@ -145,6 +153,7 @@ export interface FileRoutesById {
   '/language': typeof LanguageRoute
   '/login': typeof LoginRoute
   '/pharmacies': typeof PharmaciesRoute
+  '/profile': typeof ProfileRoute
   '/records': typeof RecordsRoute
   '/register': typeof RegisterRoute
   '/schemes': typeof SchemesRoute
@@ -164,6 +173,7 @@ export interface FileRouteTypes {
     | '/language'
     | '/login'
     | '/pharmacies'
+    | '/profile'
     | '/records'
     | '/register'
     | '/schemes'
@@ -181,6 +191,7 @@ export interface FileRouteTypes {
     | '/language'
     | '/login'
     | '/pharmacies'
+    | '/profile'
     | '/records'
     | '/register'
     | '/schemes'
@@ -198,6 +209,7 @@ export interface FileRouteTypes {
     | '/language'
     | '/login'
     | '/pharmacies'
+    | '/profile'
     | '/records'
     | '/register'
     | '/schemes'
@@ -216,6 +228,7 @@ export interface RootRouteChildren {
   LanguageRoute: typeof LanguageRoute
   LoginRoute: typeof LoginRoute
   PharmaciesRoute: typeof PharmaciesRoute
+  ProfileRoute: typeof ProfileRoute
   RecordsRoute: typeof RecordsRoute
   RegisterRoute: typeof RegisterRoute
   SchemesRoute: typeof SchemesRoute
@@ -274,6 +287,13 @@ declare module '@tanstack/react-router' {
       path: '/records'
       fullPath: '/records'
       preLoaderRoute: typeof RecordsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pharmacies': {
@@ -344,6 +364,7 @@ const rootRouteChildren: RootRouteChildren = {
   LanguageRoute: LanguageRoute,
   LoginRoute: LoginRoute,
   PharmaciesRoute: PharmaciesRoute,
+  ProfileRoute: ProfileRoute,
   RecordsRoute: RecordsRoute,
   RegisterRoute: RegisterRoute,
   SchemesRoute: SchemesRoute,

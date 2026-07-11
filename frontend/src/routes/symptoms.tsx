@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/symptoms")({
   head: () => ({ meta: [{ title: "Healthbox AI Diagnostics" }] }),
@@ -96,10 +97,34 @@ function VitalField({
         <Icon className="h-4 w-4 text-primary" />
         {label}
       </Label>
-      <Input type={type} inputMode={type === "number" ? "decimal" : "text"} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} className="h-11 border-0 bg-transparent px-0 text-base font-bold focus-visible:ring-0" />
+      <Input
+        type={type}
+        inputMode={type === "number" ? "decimal" : "text"}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-11 border-0 bg-transparent px-0 text-base font-bold focus-visible:ring-0"
+      />
     </div>
   );
 }
+
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: () => void;
+  onresult: (event: {
+    results: { [key: number]: { [key: number]: { transcript: string } } };
+  }) => void;
+  onerror: (event: { error: string }) => void;
+  onend: () => void;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 
 function SymptomsPage() {
   const navigate = useNavigate();
@@ -123,53 +148,155 @@ function SymptomsPage() {
   const [location, setLocation] = useState("");
   const [quality, setQuality] = useState("");
   const [aggravating, setAggravating] = useState("");
-  
+
   const [flags, setFlags] = useState<string[]>([]);
   const [severity, setSeverity] = useState([5]);
   const [transcript, setTranscript] = useState("");
   const [listening, setListening] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const phraseIdx = useRef(0);
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const [speechLang, setSpeechLang] = useState("en-US");
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const [speechStatus, setSpeechStatus] = useState<string>("");
 
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [reportBase64, setReportBase64] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!listening) return;
-    const id = setInterval(() => {
-      if (phraseIdx.current >= SAMPLE_PHRASES.length) {
-        setListening(false);
-        return;
-      }
-      setTranscript((t) => t + SAMPLE_PHRASES[phraseIdx.current]);
-      phraseIdx.current += 1;
-    }, 1000);
-    return () => clearInterval(id);
-  }, [listening]);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
-  const toggle = (
-    value: string,
-    list: string[],
-    setList: (v: string[]) => void,
-  ) => {
+  // Check speech support on mount and handle cleanup
+  useEffect(() => {
+    const isSupported =
+      typeof window !== "undefined" &&
+      (!!(
+        window as Window & {
+          SpeechRecognition?: SpeechRecognitionConstructor;
+          webkitSpeechRecognition?: SpeechRecognitionConstructor;
+        }
+      ).SpeechRecognition ||
+        !!(window as Window & { webkitSpeechRecognition?: SpeechRecognitionConstructor })
+          .webkitSpeechRecognition);
+    setSpeechSupported(isSupported);
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, []);
+
+  const toggle = (value: string, list: string[], setList: (v: string[]) => void) => {
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
   };
 
   const toggleListening = () => {
+    const isSupported =
+      typeof window !== "undefined" &&
+      (!!(
+        window as Window & {
+          SpeechRecognition?: SpeechRecognitionConstructor;
+          webkitSpeechRecognition?: SpeechRecognitionConstructor;
+        }
+      ).SpeechRecognition ||
+        !!(window as Window & { webkitSpeechRecognition?: SpeechRecognitionConstructor })
+          .webkitSpeechRecognition);
+
+    if (!isSupported) {
+      setSpeechError("Voice input is not supported in your browser. Please type your symptoms.");
+      toast.error("Voice input is not supported in your browser.");
+      return;
+    }
+
     if (listening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
       setListening(false);
       return;
     }
-    phraseIdx.current = 0;
-    setListening(true);
+
+    setSpeechError(null);
+    setSpeechStatus("");
+
+    const SpeechRecognitionAPI =
+      (
+        window as Window & {
+          SpeechRecognition?: SpeechRecognitionConstructor;
+          webkitSpeechRecognition?: SpeechRecognitionConstructor;
+        }
+      ).SpeechRecognition ||
+      (window as Window & { webkitSpeechRecognition?: SpeechRecognitionConstructor })
+        .webkitSpeechRecognition;
+
+    if (!SpeechRecognitionAPI) {
+      setSpeechError("Voice input is not supported in your browser. Please type your symptoms.");
+      return;
+    }
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = speechLang;
+
+    recognition.onstart = () => {
+      setListening(true);
+      setSpeechStatus("🎤 Listening...");
+      toast("Listening... Speak your symptoms now.");
+    };
+
+    recognition.onresult = (e: {
+      results: { [key: number]: { [key: number]: { transcript: string } } };
+    }) => {
+      setSpeechStatus("Processing...");
+      const text = e.results[0][0]?.transcript;
+      if (text) {
+        setTranscript((prev) => (prev ? prev.trim() + " " + text.trim() : text.trim()));
+        setSpeechStatus("Recognition completed");
+      }
+    };
+
+    recognition.onerror = (e: { error: string }) => {
+      console.error("Speech Recognition Error:", e);
+      if (e.error === "not-allowed") {
+        setSpeechStatus("Permission denied");
+        setSpeechError("Microphone permission denied. Please grant permission and try again.");
+        toast.error("Microphone permission denied.");
+      } else if (e.error === "network") {
+        setSpeechStatus("Network error");
+        setSpeechError("Network error. Please check your internet connection.");
+        toast.error("Network error during recognition.");
+      } else {
+        setSpeechStatus("Error occurred");
+        setSpeechError(`Speech recognition failed: ${e.error}`);
+        toast.error(`Recognition error: ${e.error}`);
+      }
+      setListening(false);
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch (err) {
+      console.error("Failed to start speech recognition:", err);
+      setSpeechError("Failed to start voice recognition session.");
+      setListening(false);
+    }
   };
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, setter: (v: string) => void) => {
+  const handleFile = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (v: string) => void,
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === 'string') {
+      if (typeof reader.result === "string") {
         setter(reader.result);
         toast("File uploaded successfully");
       }
@@ -195,7 +322,7 @@ function SymptomsPage() {
           heart_rate: heartRate || "Unknown",
           spo2: spo2 || "Unknown",
           blood_pressure: bp || "Unknown",
-        }
+        },
       },
       medical_background: {
         pre_existing_conditions: conditions.length > 0 ? conditions : ["None"],
@@ -218,16 +345,19 @@ function SymptomsPage() {
       free_form_transcript: transcript || "None",
       uploads_scans: {
         photo: photoBase64,
-        reports: reportBase64
-      }
+        reports: reportBase64,
+      },
     };
 
     try {
-      const response = await fetch("https://unviable-reps-grandkid.ngrok-free.dev/predict_with_report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+      const response = await fetch(
+        "https://unviable-reps-grandkid.ngrok-free.dev/predict_with_report",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
 
       if (!response.ok) {
         throw new Error("Failed to get diagnosis");
@@ -242,14 +372,16 @@ function SymptomsPage() {
           method: "POST",
           body: JSON.stringify({
             report: report,
-            chief_complaint: onset ? `${onset}${location ? ` (Location: ${location})` : ""}` : (transcript || "AI Diagnostic Triage")
-          })
+            chief_complaint: onset
+              ? `${onset}${location ? ` (Location: ${location})` : ""}`
+              : transcript || "AI Diagnostic Triage",
+          }),
         });
       } catch (err) {
         console.error("Failed to save report to database", err);
       }
 
-      navigate({ to: "/triage-results", state: { report } as any });
+      navigate({ to: "/triage-results", state: { report } as Record<string, unknown> });
     } catch (error) {
       console.error(error);
       toast.error("AI engine is currently unavailable or still booting.");
@@ -297,19 +429,53 @@ function SymptomsPage() {
           </div>
           <div className="rounded-2xl border border-border bg-background p-3">
             <Label className="mb-1.5 block text-xs font-semibold text-muted-foreground">Age</Label>
-            <Input type="number" inputMode="numeric" placeholder="e.g., 34" value={age} onChange={(e) => setAge(e.target.value)} className="h-11 border-0 bg-transparent px-0 text-base font-bold focus-visible:ring-0" />
+            <Input
+              type="number"
+              inputMode="numeric"
+              placeholder="e.g., 34"
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+              className="h-11 border-0 bg-transparent px-0 text-base font-bold focus-visible:ring-0"
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <VitalField icon={Thermometer} label="Body Temp (°F/°C)" placeholder="98.6" value={temp} onChange={setTemp} />
-            <VitalField icon={HeartPulse} label="Heart Rate (BPM)" placeholder="72" value={heartRate} onChange={setHeartRate} />
-            <VitalField icon={Activity} label="SpO2 (%)" placeholder="98" value={spo2} onChange={setSpo2} />
-            <VitalField icon={Gauge} label="Blood Pressure" placeholder="120/80" type="text" value={bp} onChange={setBp} />
+            <VitalField
+              icon={Thermometer}
+              label="Body Temp (°F/°C)"
+              placeholder="98.6"
+              value={temp}
+              onChange={setTemp}
+            />
+            <VitalField
+              icon={HeartPulse}
+              label="Heart Rate (BPM)"
+              placeholder="72"
+              value={heartRate}
+              onChange={setHeartRate}
+            />
+            <VitalField
+              icon={Activity}
+              label="SpO2 (%)"
+              placeholder="98"
+              value={spo2}
+              onChange={setSpo2}
+            />
+            <VitalField
+              icon={Gauge}
+              label="Blood Pressure"
+              placeholder="120/80"
+              type="text"
+              value={bp}
+              onChange={setBp}
+            />
           </div>
         </Section>
 
         <Section index="2" title="Medical Background">
           <div>
-            <Label className="mb-2 block text-sm font-semibold text-foreground">Pre-existing Conditions</Label>
+            <Label className="mb-2 block text-sm font-semibold text-foreground">
+              Pre-existing Conditions
+            </Label>
             <div className="flex flex-wrap gap-2">
               {CONDITIONS.map((c) => {
                 const active = conditions.includes(c);
@@ -331,31 +497,58 @@ function SymptomsPage() {
             </div>
           </div>
           <div>
-            <Label className="mb-1.5 block text-sm font-semibold text-foreground">Current Medications or Local Remedies</Label>
-            <Input placeholder="e.g., Metformin, herbal tea" className="h-12" value={medications} onChange={(e) => setMedications(e.target.value)} />
+            <Label className="mb-1.5 block text-sm font-semibold text-foreground">
+              Current Medications or Local Remedies
+            </Label>
+            <Input
+              placeholder="e.g., Metformin, herbal tea"
+              className="h-12"
+              value={medications}
+              onChange={(e) => setMedications(e.target.value)}
+            />
           </div>
           <div>
-            <Label className="mb-1.5 block text-sm font-semibold text-foreground">Known Allergies</Label>
-            <Input placeholder="e.g., Penicillin" className="h-12" value={allergies} onChange={(e) => setAllergies(e.target.value)} />
+            <Label className="mb-1.5 block text-sm font-semibold text-foreground">
+              Known Allergies
+            </Label>
+            <Input
+              placeholder="e.g., Penicillin"
+              className="h-12"
+              value={allergies}
+              onChange={(e) => setAllergies(e.target.value)}
+            />
           </div>
         </Section>
 
         <Section index="3" title="Lifestyle & Environment">
           <div>
-            <Label className="mb-2 block text-sm font-semibold text-foreground">Social Habits</Label>
+            <Label className="mb-2 block text-sm font-semibold text-foreground">
+              Social Habits
+            </Label>
             <div className="space-y-2.5">
               {HABITS.map((h) => (
-                <label key={h} className="flex items-center gap-3 rounded-2xl border border-border bg-background p-3">
-                  <Checkbox checked={habits.includes(h)} onCheckedChange={() => toggle(h, habits, setHabits)} className="h-5 w-5" />
+                <label
+                  key={h}
+                  className="flex items-center gap-3 rounded-2xl border border-border bg-background p-3"
+                >
+                  <Checkbox
+                    checked={habits.includes(h)}
+                    onCheckedChange={() => toggle(h, habits, setHabits)}
+                    className="h-5 w-5"
+                  />
                   <span className="text-base font-medium text-foreground">{h}</span>
                 </label>
               ))}
             </div>
           </div>
           <div>
-            <Label className="mb-1.5 block text-sm font-semibold text-foreground">Recent Travel to Outbreak Areas?</Label>
+            <Label className="mb-1.5 block text-sm font-semibold text-foreground">
+              Recent Travel to Outbreak Areas?
+            </Label>
             <Select value={travel} onValueChange={setTravel}>
-              <SelectTrigger className="h-12"><SelectValue placeholder="Select an option" /></SelectTrigger>
+              <SelectTrigger className="h-12">
+                <SelectValue placeholder="Select an option" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="yes">Yes</SelectItem>
                 <SelectItem value="no">No</SelectItem>
@@ -364,9 +557,13 @@ function SymptomsPage() {
             </Select>
           </div>
           <div>
-            <Label className="mb-1.5 block text-sm font-semibold text-foreground">Primary Drinking Water Source</Label>
+            <Label className="mb-1.5 block text-sm font-semibold text-foreground">
+              Primary Drinking Water Source
+            </Label>
             <Select value={water} onValueChange={setWater}>
-              <SelectTrigger className="h-12"><SelectValue placeholder="Select source" /></SelectTrigger>
+              <SelectTrigger className="h-12">
+                <SelectValue placeholder="Select source" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="tap">Tap</SelectItem>
                 <SelectItem value="well">Well / Borewell</SelectItem>
@@ -378,9 +575,13 @@ function SymptomsPage() {
 
         <Section index="4" title="Primary Symptom Details">
           <div>
-            <Label className="mb-1.5 block text-sm font-semibold text-foreground">Onset — When did it start?</Label>
+            <Label className="mb-1.5 block text-sm font-semibold text-foreground">
+              Onset — When did it start?
+            </Label>
             <Select value={onset} onValueChange={setOnset}>
-              <SelectTrigger className="h-12"><SelectValue placeholder="Select timing" /></SelectTrigger>
+              <SelectTrigger className="h-12">
+                <SelectValue placeholder="Select timing" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="today">Today</SelectItem>
                 <SelectItem value="2-3days">2-3 Days</SelectItem>
@@ -390,13 +591,24 @@ function SymptomsPage() {
             </Select>
           </div>
           <div>
-            <Label className="mb-1.5 block text-sm font-semibold text-foreground">Location — Where is the discomfort? Does it move?</Label>
-            <Input placeholder="e.g., Lower abdomen, moves to back" className="h-12" value={location} onChange={(e) => setLocation(e.target.value)} />
+            <Label className="mb-1.5 block text-sm font-semibold text-foreground">
+              Location — Where is the discomfort? Does it move?
+            </Label>
+            <Input
+              placeholder="e.g., Lower abdomen, moves to back"
+              className="h-12"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+            />
           </div>
           <div>
-            <Label className="mb-1.5 block text-sm font-semibold text-foreground">Quality — What does it feel like?</Label>
+            <Label className="mb-1.5 block text-sm font-semibold text-foreground">
+              Quality — What does it feel like?
+            </Label>
             <Select value={quality} onValueChange={setQuality}>
-              <SelectTrigger className="h-12"><SelectValue placeholder="Select sensation" /></SelectTrigger>
+              <SelectTrigger className="h-12">
+                <SelectValue placeholder="Select sensation" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="sharp">Sharp</SelectItem>
                 <SelectItem value="dull">Dull Ache</SelectItem>
@@ -407,13 +619,22 @@ function SymptomsPage() {
             </Select>
           </div>
           <div>
-            <Label className="mb-1.5 block text-sm font-semibold text-foreground">Aggravating / Alleviating — What makes it better or worse?</Label>
-            <Input placeholder="e.g., Worse after eating, better with rest" className="h-12" value={aggravating} onChange={(e) => setAggravating(e.target.value)} />
+            <Label className="mb-1.5 block text-sm font-semibold text-foreground">
+              Aggravating / Alleviating — What makes it better or worse?
+            </Label>
+            <Input
+              placeholder="e.g., Worse after eating, better with rest"
+              className="h-12"
+              value={aggravating}
+              onChange={(e) => setAggravating(e.target.value)}
+            />
           </div>
           <div>
             <div className="mb-2 flex items-center justify-between">
               <Label className="text-sm font-semibold text-foreground">Severity Scale</Label>
-              <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary">{severity[0]} / 10</span>
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary">
+                {severity[0]} / 10
+              </span>
             </div>
             <Slider min={1} max={10} step={1} value={severity} onValueChange={setSeverity} />
             <div className="mt-1.5 flex justify-between text-xs font-medium text-muted-foreground">
@@ -433,10 +654,14 @@ function SymptomsPage() {
                   type="button"
                   onClick={() => toggle(f, flags, setFlags)}
                   className={`flex items-center gap-2 rounded-2xl border-2 p-3 text-left text-sm font-semibold transition-colors ${
-                    active ? "border-destructive bg-destructive/10 text-destructive" : "border-border bg-background text-foreground"
+                    active
+                      ? "border-destructive bg-destructive/10 text-destructive"
+                      : "border-border bg-background text-foreground"
                   }`}
                 >
-                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 ${active ? "border-destructive bg-destructive text-destructive-foreground" : "border-border"}`}>
+                  <span
+                    className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 ${active ? "border-destructive bg-destructive text-destructive-foreground" : "border-border"}`}
+                  >
                     {active && <span className="text-xs">✓</span>}
                   </span>
                   {f}
@@ -447,46 +672,107 @@ function SymptomsPage() {
         </Section>
 
         <Section index="6" title="Tell Us Freely">
-          <p className="-mt-2 text-sm text-muted-foreground">Tap the microphone and describe your condition in your own language.</p>
+          <p className="-mt-2 text-sm text-muted-foreground">
+            Tap the microphone and describe your condition in your own language.
+          </p>
+
+          <div className="flex items-center justify-between mt-1 mb-3">
+            <Label className="text-xs font-bold text-muted-foreground">Speak Language:</Label>
+            <Select value={speechLang} onValueChange={setSpeechLang}>
+              <SelectTrigger className="w-44 h-9 rounded-xl text-xs font-bold border-border bg-background">
+                <SelectValue placeholder="Select Language" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en-US">English (en-US)</SelectItem>
+                <SelectItem value="hi-IN">Hindi (हिन्दी)</SelectItem>
+                <SelectItem value="gu-IN">Gujarati (ગુજરાતી)</SelectItem>
+                <SelectItem value="mr-IN">Marathi (મરાઠી)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {!speechSupported && (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs font-semibold text-destructive mb-3">
+              Voice input is not supported in your browser. Please type your symptoms.
+            </div>
+          )}
+
           <Textarea
             value={transcript}
             onChange={(e) => setTranscript(e.target.value)}
             placeholder="Your spoken words will appear here…"
             className="min-h-32 resize-none text-base"
           />
-          <div className="flex justify-center pt-1">
+
+          <div className="flex justify-center pt-2">
             <button
               type="button"
               onClick={toggleListening}
-              className="relative grid h-20 w-20 place-items-center rounded-full bg-secondary text-secondary-foreground shadow-lg active:scale-95"
+              className={cn(
+                "relative grid h-20 w-20 place-items-center rounded-full text-secondary-foreground shadow-lg active:scale-95 transition-all duration-300",
+                listening
+                  ? "bg-destructive text-destructive-foreground animate-pulse"
+                  : "bg-secondary text-secondary-foreground",
+              )}
             >
               {listening && (
                 <>
-                  <span className="absolute inset-0 animate-ping rounded-full bg-secondary opacity-60" />
-                  <span className="absolute -inset-2 animate-pulse rounded-full bg-secondary/30" />
+                  <span className="absolute inset-0 animate-ping rounded-full bg-destructive opacity-40" />
+                  <span className="absolute -inset-2 animate-pulse rounded-full bg-destructive/20" />
                 </>
               )}
               <Mic className="relative h-9 w-9" strokeWidth={2.25} />
             </button>
           </div>
-          <p className="text-center text-xs font-semibold text-muted-foreground">{listening ? "Listening…" : "Tap to speak"}</p>
+
+          {speechError && (
+            <p className="text-center text-xs font-semibold text-destructive mt-2">{speechError}</p>
+          )}
+
+          {!speechError && speechStatus && (
+            <p className="text-center text-xs font-semibold text-primary mt-2">{speechStatus}</p>
+          )}
+
+          {!speechError && !speechStatus && (
+            <p className="text-center text-xs font-semibold text-muted-foreground mt-2">
+              {listening ? "🎤 Listening..." : "Tap to speak"}
+            </p>
+          )}
         </Section>
 
         <Section index="7" title="Uploads & Scans">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-border bg-background p-5 text-center active:bg-muted">
-              <input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => handleFile(e, setPhotoBase64)} />
+              <input
+                type="file"
+                accept="image/*,video/*"
+                className="hidden"
+                onChange={(e) => handleFile(e, setPhotoBase64)}
+              />
               <Camera className="h-8 w-8 text-primary" />
               <span className="text-sm font-semibold text-foreground">Affected Area</span>
-              <span className="text-xs text-muted-foreground">Upload a photo or short video (e.g., skin scan).</span>
-              {photoBase64 && <span className="text-xs text-primary font-bold">Image Attached</span>}
+              <span className="text-xs text-muted-foreground">
+                Upload a photo or short video (e.g., skin scan).
+              </span>
+              {photoBase64 && (
+                <span className="text-xs text-primary font-bold">Image Attached</span>
+              )}
             </label>
             <label className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-border bg-background p-5 text-center active:bg-muted">
-              <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => handleFile(e, setReportBase64)} />
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                onChange={(e) => handleFile(e, setReportBase64)}
+              />
               <FileText className="h-8 w-8 text-primary" />
               <span className="text-sm font-semibold text-foreground">Reports & Cards</span>
-              <span className="text-xs text-muted-foreground">Past reports or Ayushman Card for scheme eligibility.</span>
-              {reportBase64 && <span className="text-xs text-primary font-bold">Report Attached</span>}
+              <span className="text-xs text-muted-foreground">
+                Past reports or Ayushman Card for scheme eligibility.
+              </span>
+              {reportBase64 && (
+                <span className="text-xs text-primary font-bold">Report Attached</span>
+              )}
             </label>
           </div>
         </Section>
@@ -499,7 +785,11 @@ function SymptomsPage() {
           disabled={processing}
           className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-2xl bg-secondary py-4 text-lg font-extrabold text-secondary-foreground shadow-lg active:scale-[0.99] disabled:opacity-70"
         >
-          {processing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
+          {processing ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Sparkles className="h-5 w-5" />
+          )}
           {processing ? "Analyzing…" : "Run AI Diagnosis & Routing"}
         </button>
       </div>

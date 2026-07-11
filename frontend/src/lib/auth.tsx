@@ -14,6 +14,16 @@ export interface UserProfile {
   conditions: string[];
   created_at: string;
   updated_at: string;
+
+  // New recommended user fields (strict Task 9 / Task 1 compliance)
+  name?: string;
+  mobile_number?: string;
+  city?: string;
+  has_aayushman_card?: boolean;
+  aayushman_card_number?: string | null;
+  profile_image?: string | null;
+  email?: string | null;
+  role?: string | null;
 }
 
 export interface VerifyOtpResponse {
@@ -49,6 +59,7 @@ interface AuthContextType {
   verifyOtp: (phone: string, code: string) => Promise<VerifyOtpResponse>;
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (payload: Partial<UserProfile>) => Promise<void>;
   refetchSession: () => Promise<void>;
 }
 
@@ -120,10 +131,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignore network errors on logout
     } finally {
+      // Clear all state
       setUser(null);
       setIsAuthenticated(false);
       setPendingPhone(null);
+      // Clear localStorage and sessionStorage
+      if (typeof window !== "undefined") {
+        localStorage.clear();
+        sessionStorage.clear();
+      }
     }
+  };
+
+  const updateProfile = async (payload: Partial<UserProfile>) => {
+    const data = await apiFetch<UserProfile>("/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    setUser(data);
   };
 
   return (
@@ -137,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verifyOtp,
         register,
         logout,
+        updateProfile,
         refetchSession: fetchSession,
       }}
     >
