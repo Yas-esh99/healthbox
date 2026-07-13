@@ -5,6 +5,78 @@ from app.config import get_settings
 from app.models import RegisterRequest, UserProfile, UpdateProfileRequest
 
 
+class InMemoryUserRepository:
+    def __init__(self):
+        self._users: dict[str, UserProfile] = {}
+
+    def get_by_phone(self, phone_number: str) -> UserProfile | None:
+        return self._users.get(phone_number)
+
+    def create(self, payload: RegisterRequest) -> UserProfile:
+        now = datetime.now(UTC)
+        user_profile = UserProfile(
+            id=payload.phone_number,
+            phone_number=payload.phone_number,
+            full_name=payload.full_name,
+            state=payload.state,
+            district=payload.district,
+            age=payload.age,
+            gender=payload.gender,
+            has_ayushman=payload.has_ayushman,
+            ayushman_card_number=payload.ayushman_card_number,
+            conditions=payload.conditions,
+            created_at=now,
+            updated_at=now,
+            name=payload.full_name,
+            mobile_number=payload.phone_number,
+            city=payload.district,
+            has_aayushman_card=payload.has_ayushman,
+            aayushman_card_number=payload.ayushman_card_number,
+            profile_image=None,
+            email=None,
+            role="Patient",
+        )
+        self._users[payload.phone_number] = user_profile
+        return user_profile
+
+    def update(self, phone_number: str, payload: UpdateProfileRequest) -> UserProfile:
+        now = datetime.now(UTC)
+        existing = self._users.get(phone_number)
+        created_at = existing.created_at if existing else now
+        conditions = existing.conditions if existing else []
+
+        user_profile = UserProfile(
+            id=phone_number,
+            phone_number=phone_number,
+            full_name=payload.name,
+            state=payload.state,
+            district=payload.city,
+            age=payload.age,
+            gender=payload.gender,
+            has_ayushman=payload.has_aayushman_card,
+            ayushman_card_number=payload.aayushman_card_number,
+            conditions=conditions,
+            created_at=created_at,
+            updated_at=now,
+            name=payload.name,
+            mobile_number=phone_number,
+            city=payload.city,
+            has_aayushman_card=payload.has_aayushman_card,
+            aayushman_card_number=payload.aayushman_card_number,
+            profile_image=payload.profile_image,
+            email=payload.email,
+            role=payload.role or "Patient",
+        )
+        self._users[phone_number] = user_profile
+        return user_profile
+
+    def migrate_phone(self, old_phone: str, payload: UpdateProfileRequest) -> UserProfile:
+        updated = self.update(old_phone, payload)
+        self._users.pop(old_phone, None)
+        self._users[payload.mobile_number] = updated.model_copy(update={"id": payload.mobile_number, "phone_number": payload.mobile_number, "mobile_number": payload.mobile_number})
+        return self._users[payload.mobile_number]
+
+
 class FirestoreUserRepository:
     def __init__(self, client: Client):
         settings = get_settings()

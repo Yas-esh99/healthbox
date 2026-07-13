@@ -24,13 +24,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useQuery } from "@tanstack/react-query";
+import { fetchStates, fetchCities } from "@/lib/api";
+import { Combobox } from "@/components/ui/combobox";
+
 import {
   Dialog,
   DialogContent,
@@ -51,14 +48,6 @@ export const Route = createFileRoute("/profile")({
   }),
   component: ProfilePage,
 });
-
-const STATES: Record<string, string[]> = {
-  Bihar: ["Patna", "Gaya", "Muzaffarpur", "Bhagalpur"],
-  "Uttar Pradesh": ["Lucknow", "Varanasi", "Gorakhpur", "Prayagraj"],
-  Rajasthan: ["Jaipur", "Jodhpur", "Udaipur", "Kota"],
-  "Madhya Pradesh": ["Bhopal", "Indore", "Gwalior", "Jabalpur"],
-  Maharashtra: ["Pune", "Nagpur", "Nashik", "Aurangabad"],
-};
 
 const GENDERS = [
   { value: "Male", label: "Male" },
@@ -103,6 +92,23 @@ function ProfilePage() {
   const [showMaskedCard, setShowMaskedCard] = useState(true);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
+  // Dynamic location queries
+  const { data: statesList, error: statesError, isLoading: statesLoading, refetch: refetchStates } = useQuery({
+    queryKey: ["states"],
+    queryFn: fetchStates,
+    staleTime: Infinity,
+  });
+
+  const { data: citiesList, error: citiesError, isLoading: citiesLoading, refetch: refetchCities } = useQuery({
+    queryKey: ["cities", stateValue],
+    queryFn: () => fetchCities(stateValue),
+    enabled: !!stateValue,
+    staleTime: Infinity,
+  });
+
+  const statesOptions = (statesList || []).map((s) => ({ value: s, label: s }));
+  const citiesOptions = (citiesList || []).map((c) => ({ value: c, label: c }));
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Populate form states once user is loaded
@@ -125,9 +131,9 @@ function ProfilePage() {
   // Handle State change (reset city selection)
   const handleStateChange = (val: string) => {
     setStateValue(val);
-    const citiesForState = STATES[val] || [];
-    setCityValue(citiesForState[0] || "");
+    setCityValue("");
   };
+
 
   // Convert uploaded image to resized base64
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -375,34 +381,66 @@ function ProfilePage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>State</Label>
-                <Select value={stateValue} onValueChange={handleStateChange}>
-                  <SelectTrigger className="h-11 rounded-xl border-border/60">
-                    <SelectValue placeholder="Select state" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(STATES).map((st) => (
-                      <SelectItem key={st} value={st}>
-                        {st}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {statesLoading ? (
+                  <div className="flex h-11 w-full items-center justify-between rounded-xl border border-border/60 px-3 bg-card text-muted-foreground">
+                    <span className="text-sm flex items-center gap-1.5">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      Loading...
+                    </span>
+                  </div>
+                ) : statesError ? (
+                  <button
+                    type="button"
+                    onClick={() => refetchStates()}
+                    className="flex h-11 w-full items-center justify-between rounded-xl border border-destructive/60 px-3 bg-destructive/10 text-destructive text-xs font-medium active:scale-[0.99] transition-all"
+                  >
+                    Error. Retry.
+                  </button>
+                ) : (
+                  <Combobox
+                    options={statesOptions}
+                    value={stateValue}
+                    onChange={handleStateChange}
+                    placeholder="Select state"
+                    searchPlaceholder="Search state..."
+                    emptyMessage="No state found."
+                    className="h-11 rounded-xl border-border/60 text-sm"
+                  />
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label>City / District</Label>
-                <Select value={cityValue} onValueChange={setCityValue} disabled={!stateValue}>
-                  <SelectTrigger className="h-11 rounded-xl border-border/60">
-                    <SelectValue placeholder={stateValue ? "Select city" : "Choose state"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(STATES[stateValue] ?? []).map((ct) => (
-                      <SelectItem key={ct} value={ct}>
-                        {ct}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {!stateValue ? (
+                  <div className="flex h-11 w-full items-center justify-between rounded-xl border border-border/60 px-3 bg-card text-muted-foreground opacity-60">
+                    <span className="text-sm">Choose state</span>
+                  </div>
+                ) : citiesLoading ? (
+                  <div className="flex h-11 w-full items-center justify-between rounded-xl border border-border/60 px-3 bg-card text-muted-foreground">
+                    <span className="text-sm flex items-center gap-1.5">
+                      <Loader2 className="h-4 w-4 animate-spin text-secondary" />
+                      Loading...
+                    </span>
+                  </div>
+                ) : citiesError ? (
+                  <button
+                    type="button"
+                    onClick={() => refetchCities()}
+                    className="flex h-11 w-full items-center justify-between rounded-xl border border-destructive/60 px-3 bg-destructive/10 text-destructive text-xs font-medium active:scale-[0.99] transition-all"
+                  >
+                    Error. Retry.
+                  </button>
+                ) : (
+                  <Combobox
+                    options={citiesOptions}
+                    value={cityValue}
+                    onChange={setCityValue}
+                    placeholder="Select city"
+                    searchPlaceholder="Search city..."
+                    emptyMessage="No city found."
+                    className="h-11 rounded-xl border-border/60 text-sm"
+                  />
+                )}
               </div>
             </div>
 
