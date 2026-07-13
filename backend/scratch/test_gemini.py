@@ -19,8 +19,8 @@ try:
         if 'generateContent' in m.supported_generation_methods:
             print(f" - {m.name}")
             
-    print("\nTesting generation with gemini-2.5-flash...")
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    print("\nTesting generation with gemini-3.5-flash...")
+    model = genai.GenerativeModel('gemini-3.5-flash')
     response = model.generate_content("Hello! Say hi.")
     print("Response:", response.text)
 except Exception as e:
