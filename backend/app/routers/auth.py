@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from app.config import get_settings
 from app.models import (
@@ -10,6 +10,8 @@ from app.models import (
     SessionResponse,
     VerifyOtpRequest,
     VerifyOtpResponse,
+    UpdateProfileRequest,
+    UserProfile,
 )
 from app.repositories.users import FirestoreUserRepository
 from app.services.auth import (
@@ -163,3 +165,56 @@ def logout(response: Response) -> LogoutResponse:
     _clear_cookie(response, settings.auth_cookie_name)
     _clear_cookie(response, settings.registration_cookie_name)
     return LogoutResponse(message="Logged out successfully.")
+
+
+def get_current_phone(request: Request) -> str:
+    """Dependency to retrieve the authenticated user's phone number from session cookie."""
+    settings = get_settings()
+    session_token = request.cookies.get(settings.auth_cookie_name)
+    if not session_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please log in first.",
+        )
+    return decode_token(session_token, expected_type="session")
+
+
+@router.put("/profile", response_model=UserProfile)
+def update_profile(
+    payload: UpdateProfileRequest,
+    request: Request,
+    response: Response,
+    current_phone: str = Depends(get_current_phone),
+) -> UserProfile:
+    settings = get_settings()
+    repository = get_user_repository(request)
+
+    # If mobile number changed, ensure uniqueness
+    if payload.mobile_number != current_phone:
+        existing_user = repository.get_by_phone(payload.mobile_number)
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A user with this mobile number already exists.",
+            )
+
+        # Migrate user document
+        user_profile = repository.migrate_phone(current_phone, payload)
+
+        # Migrate associated triage records
+        records_repo = request.app.state.records_repository
+        records_repo.migrate_user_phone(current_phone, payload.mobile_number)
+
+        # Re-set session token with the new phone number
+        session_token = create_session_token(payload.mobile_number)
+        _set_cookie(
+            response,
+            settings.auth_cookie_name,
+            session_token,
+            max_age=settings.session_expire_hours * 60 * 60,
+        )
+        return user_profile
+    else:
+        # Update user profile details
+        return repository.update(current_phone, payload)
+
