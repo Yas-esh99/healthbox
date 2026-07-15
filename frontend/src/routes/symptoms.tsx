@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { validateForm, FormErrors } from "@/lib/validation";
 
 export const Route = createFileRoute("/symptoms")({
   head: () => ({ meta: [{ title: "Healthbox AI Diagnostics" }] }),
@@ -80,31 +81,44 @@ function VitalField({
   icon: Icon,
   label,
   placeholder,
-  type = "number",
+  type = "text",
+  inputMode = "decimal",
   value,
   onChange,
+  onBlur,
+  error,
+  touched,
 }: {
   icon: React.ElementType;
   label: string;
   placeholder?: string;
   type?: string;
+  inputMode?: "decimal" | "numeric" | "text" | "search" | "tel" | "url" | "email";
   value: string;
   onChange: (val: string) => void;
+  onBlur?: () => void;
+  error?: string;
+  touched?: boolean;
 }) {
+  const hasError = touched && error;
   return (
-    <div className="rounded-2xl border border-border bg-background p-3">
+    <div className={cn("rounded-2xl border p-3 bg-background", hasError ? "border-destructive" : "border-border")}>
       <Label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
         <Icon className="h-4 w-4 text-primary" />
         {label}
       </Label>
       <Input
         type={type}
-        inputMode={type === "number" ? "decimal" : "text"}
+        inputMode={inputMode}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-11 border-0 bg-transparent px-0 text-base font-bold focus-visible:ring-0"
+        onBlur={onBlur}
+        className="h-11 border-0 bg-transparent px-0 text-base font-bold focus-visible:ring-0 focus-visible:outline-none"
       />
+      {hasError && (
+        <p className="text-xs font-semibold text-destructive mt-1">{error}</p>
+      )}
     </div>
   );
 }
@@ -135,6 +149,67 @@ function SymptomsPage() {
   const [heartRate, setHeartRate] = useState("");
   const [spo2, setSpo2] = useState("");
   const [bp, setBp] = useState("");
+
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const formValues = {
+    age,
+    temp,
+    heartRate,
+    spo2,
+    bp,
+  };
+
+  const currentErrors = validateForm(formValues);
+  const isValid = Object.keys(currentErrors).length === 0;
+
+  const showError = (field: keyof FormErrors) => {
+    return touched[field] ? currentErrors[field] : undefined;
+  };
+
+  const handleBlur = (field: string) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  };
+
+  const handleAgeChange = (val: string) => {
+    const cleaned = val.replace(/[^0-9]/g, "");
+    setAge(cleaned);
+  };
+
+  const handleTempChange = (val: string) => {
+    const cleaned = val.replace(/[^0-9.]/g, "");
+    const parts = cleaned.split(".");
+    if (parts.length > 2) {
+      setTemp(parts[0] + "." + parts.slice(1).join(""));
+    } else {
+      setTemp(cleaned);
+    }
+  };
+
+  const handleHeartRateChange = (val: string) => {
+    const cleaned = val.replace(/[^0-9]/g, "");
+    setHeartRate(cleaned);
+  };
+
+  const handleSpo2Change = (val: string) => {
+    const cleaned = val.replace(/[^0-9.]/g, "");
+    const parts = cleaned.split(".");
+    if (parts.length > 2) {
+      setSpo2(parts[0] + "." + parts.slice(1).join(""));
+    } else {
+      setSpo2(cleaned);
+    }
+  };
+
+  const handleBpChange = (val: string) => {
+    const cleaned = val.replace(/[^0-9/]/g, "");
+    const parts = cleaned.split("/");
+    if (parts.length > 2) {
+      setBp(parts[0] + "/" + parts.slice(1).join(""));
+    } else {
+      setBp(cleaned);
+    }
+  };
 
   const [conditions, setConditions] = useState<string[]>([]);
   const [medications, setMedications] = useState("");
@@ -305,8 +380,21 @@ function SymptomsPage() {
   };
 
   const submit = async () => {
+    setTouched({
+      age: true,
+      temp: true,
+      heartRate: true,
+      spo2: true,
+      bp: true,
+    });
+
     if (!gender || !age) {
       toast.error("Please provide gender and age.");
+      return;
+    }
+
+    if (!isValid) {
+      toast.error("Please correct the errors in the form before submitting.");
       return;
     }
 
@@ -427,46 +515,69 @@ function SymptomsPage() {
               );
             })}
           </div>
-          <div className="rounded-2xl border border-border bg-background p-3">
+          <div className={cn("rounded-2xl border p-3 bg-background", showError("age") ? "border-destructive" : "border-border")}>
             <Label className="mb-1.5 block text-xs font-semibold text-muted-foreground">Age</Label>
             <Input
-              type="number"
+              type="text"
               inputMode="numeric"
               placeholder="e.g., 34"
               value={age}
-              onChange={(e) => setAge(e.target.value)}
-              className="h-11 border-0 bg-transparent px-0 text-base font-bold focus-visible:ring-0"
+              onChange={(e) => handleAgeChange(e.target.value)}
+              onBlur={() => handleBlur("age")}
+              className="h-11 border-0 bg-transparent px-0 text-base font-bold focus-visible:ring-0 focus-visible:outline-none"
             />
+            {showError("age") && (
+              <p className="text-xs font-semibold text-destructive mt-1">{showError("age")}</p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <VitalField
               icon={Thermometer}
               label="Body Temp (°F/°C)"
               placeholder="98.6"
+              type="text"
+              inputMode="decimal"
               value={temp}
-              onChange={setTemp}
+              onChange={handleTempChange}
+              onBlur={() => handleBlur("temp")}
+              error={currentErrors.temp}
+              touched={touched.temp}
             />
             <VitalField
               icon={HeartPulse}
               label="Heart Rate (BPM)"
               placeholder="72"
+              type="text"
+              inputMode="numeric"
               value={heartRate}
-              onChange={setHeartRate}
+              onChange={handleHeartRateChange}
+              onBlur={() => handleBlur("heartRate")}
+              error={currentErrors.heartRate}
+              touched={touched.heartRate}
             />
             <VitalField
               icon={Activity}
               label="SpO2 (%)"
               placeholder="98"
+              type="text"
+              inputMode="decimal"
               value={spo2}
-              onChange={setSpo2}
+              onChange={handleSpo2Change}
+              onBlur={() => handleBlur("spo2")}
+              error={currentErrors.spo2}
+              touched={touched.spo2}
             />
             <VitalField
               icon={Gauge}
               label="Blood Pressure"
               placeholder="120/80"
               type="text"
+              inputMode="text"
               value={bp}
-              onChange={setBp}
+              onChange={handleBpChange}
+              onBlur={() => handleBlur("bp")}
+              error={currentErrors.bp}
+              touched={touched.bp}
             />
           </div>
         </Section>
@@ -782,7 +893,7 @@ function SymptomsPage() {
         <button
           type="button"
           onClick={submit}
-          disabled={processing}
+          disabled={processing || !isValid || !gender || !age}
           className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-2xl bg-secondary py-4 text-lg font-extrabold text-secondary-foreground shadow-lg active:scale-[0.99] disabled:opacity-70"
         >
           {processing ? (
