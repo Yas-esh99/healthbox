@@ -17,6 +17,7 @@ import {
   MapPin,
   Phone,
   Navigation,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -76,6 +77,7 @@ function TriageResultsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [showPrivateHospitals, setShowPrivateHospitals] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // @ts-ignore
   const report = location.state?.report || {
@@ -120,6 +122,202 @@ function TriageResultsPage() {
     minute: "2-digit",
   });
 
+  const handleDownloadPDF = async () => {
+    setIsGenerating(true);
+    const toastId = toast.loading("Generating report PDF...");
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      let y = 20;
+
+      // Draw header banner
+      doc.setFillColor(15, 118, 110); // primary teal color
+      doc.rect(0, 0, 210, 40, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("HEALTHBOX CLINICAL SUMMARY REPORT", 15, 18);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`Report ID: ${report.report_id || "HB-2026-9941"}`, 15, 26);
+      doc.text(`Generated: ${timestamp}`, 15, 31);
+
+      y = 50;
+
+      // Emergency Level
+      const risk = (report.emergency_level?.toLowerCase() || "moderate") as RiskTier;
+      const cfg = RISK_CONFIG[risk] || RISK_CONFIG.moderate;
+
+      // Draw risk colored banner
+      if (risk === "critical" || risk === "high") {
+        doc.setFillColor(220, 38, 38); // destructive red
+      } else if (risk === "moderate") {
+        doc.setFillColor(245, 158, 11); // warning orange/yellow
+      } else {
+        doc.setFillColor(22, 163, 74); // success green
+      }
+      doc.rect(15, y, 180, 10, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(`EMERGENCY LEVEL: ${cfg.label.toUpperCase()}`, 20, y + 6.5);
+
+      y += 18;
+
+      // Primary Diagnosis
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("PRIMARY DIAGNOSIS", 15, y);
+      y += 6;
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+
+      const diagLines = doc.splitTextToSize(report.primary_diagnosis || "Unknown", 180);
+      diagLines.forEach((line: string) => {
+        if (y > 275) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(line, 15, y);
+        y += 8;
+      });
+
+      doc.setTextColor(15, 118, 110);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(`Clinical Correlation Confidence: ${report.confidence_percentage || "N/A"}`, 15, y);
+      y += 5;
+
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Condition Stage: ${report.condition_stage || "N/A"}`, 15, y);
+
+      y += 15;
+
+      // Helper for printing sections
+      const printSectionHeader = (title: string) => {
+        if (y > 250) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.setTextColor(15, 118, 110);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text(title, 15, y);
+        y += 2;
+        doc.setDrawColor(226, 232, 240);
+        doc.line(15, y, 195, y);
+        y += 6;
+      };
+
+      const printBulletList = (items: string[], bulletChar: string, bulletColor: [number, number, number]) => {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        
+        items.forEach((item) => {
+          const lines = doc.splitTextToSize(item, 170);
+          lines.forEach((line: string, index: number) => {
+            if (y > 275) {
+              doc.addPage();
+              y = 20;
+            }
+            if (index === 0) {
+              // Draw bullet indicator
+              doc.setTextColor(bulletColor[0], bulletColor[1], bulletColor[2]);
+              doc.setFont("helvetica", "bold");
+              doc.text(bulletChar, 15, y);
+              doc.setFont("helvetica", "normal");
+              doc.setTextColor(51, 65, 85);
+              doc.text(line, 22, y);
+            } else {
+              doc.setTextColor(51, 65, 85);
+              doc.text(line, 22, y);
+            }
+            y += 6;
+          });
+        });
+        y += 4;
+      };
+
+      // 1. Clinical Evidence
+      const evidence = report.clinical_evidence || [];
+      if (evidence.length > 0) {
+        printSectionHeader("CLINICAL EVIDENCE BASE");
+        printBulletList(evidence, "-", [100, 116, 139]);
+      }
+
+      // 2. Approved Protocols
+      const approved = report.approved_protocols || [];
+      if (approved.length > 0) {
+        printSectionHeader("APPROVED PROTOCOLS");
+        printBulletList(approved, "+", [22, 163, 74]);
+      }
+
+      // 3. Contraindicated Actions
+      const contraindicated = report.contraindicated_actions || [];
+      if (contraindicated.length > 0) {
+        printSectionHeader("CONTRAINDICATED ACTIONS");
+        printBulletList(contraindicated, "x", [220, 38, 38]);
+      }
+
+      // 4. Precautions
+      const precautions = report.precautions || [];
+      if (precautions.length > 0) {
+        printSectionHeader("PRECAUTIONS & SYMPTOM TRACKING");
+        printBulletList(precautions, "!", [15, 118, 110]);
+      }
+
+      // Disclaimer
+      if (y > 255) {
+        doc.addPage();
+        y = 20;
+      }
+      y += 4;
+      doc.setDrawColor(226, 232, 240);
+      doc.line(15, y, 195, y);
+      y += 6;
+
+      doc.setTextColor(148, 163, 184);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      
+      const disclaimerText = 
+        "Disclaimer: This output constitutes an automated digital triage summary " +
+        "generated from preliminary user input data. It is not an active substitute " +
+        "for formal, in-person diagnostic evaluation or clinical treatment from a " +
+        "certified healthcare professional.";
+      
+      const disclaimerLines = doc.splitTextToSize(disclaimerText, 180);
+      disclaimerLines.forEach((line: string) => {
+        if (y > 285) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(line, 15, y);
+        y += 4;
+      });
+
+      doc.save(`Healthbox_Clinical_Report_${report.report_id || "HB-2026-9941"}.pdf`);
+      toast.success("Report PDF downloaded successfully!", { id: toastId });
+    } catch (err) {
+      console.error("PDF download error:", err);
+      toast.error("Failed to generate and download PDF.", { id: toastId });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div className="min-h-dvh bg-background pb-12">
       <div className="mx-auto w-full max-w-md px-5 pt-4">
@@ -148,11 +346,16 @@ function TriageResultsPage() {
             <AudioToggle />
             <button
               type="button"
-              onClick={() => toast.success("Downloading report PDF")}
+              onClick={handleDownloadPDF}
+              disabled={isGenerating}
               aria-label="Download report"
-              className="grid h-10 w-10 place-items-center rounded-full border-2 border-border bg-card text-foreground active:bg-muted"
+              className="grid h-10 w-10 place-items-center rounded-full border-2 border-border bg-card text-foreground active:bg-muted disabled:opacity-50"
             >
-              <Download className="h-5 w-5" />
+              {isGenerating ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                <Download className="h-5 w-5" />
+              )}
             </button>
           </div>
         </header>
