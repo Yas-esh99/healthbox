@@ -32,42 +32,7 @@ function cleanText(text: string): string {
   return cleaned.trim();
 }
 
-function TypewriterText({
-  text,
-  onType,
-  onComplete,
-}: {
-  text: string;
-  onType?: () => void;
-  onComplete?: () => void;
-}) {
-  const [displayedText, setDisplayedText] = useState("");
 
-  useEffect(() => {
-    let index = 0;
-    const intervalId = setInterval(() => {
-      setDisplayedText((prev) => {
-        const next = prev + text.charAt(index);
-        index++;
-        if (index >= text.length) {
-          clearInterval(intervalId);
-          setTimeout(() => {
-            onComplete?.();
-          }, 30);
-        }
-        // Let the DOM update its scrollHeight before triggering scroll
-        setTimeout(() => {
-          onType?.();
-        }, 0);
-        return next;
-      });
-    }, 12); // Fast and smooth typing speed
-
-    return () => clearInterval(intervalId);
-  }, [text]);
-
-  return <>{displayedText}</>;
-}
 
 // Render bold (**text**) and links ([label](url)) inline
 function renderInlineStyles(text: string): React.ReactNode {
@@ -249,7 +214,7 @@ function ChatPage() {
       const replyText = res.reply.trim();
       setMessages((m) => [
         ...m,
-        { id: idSeq++, from: "bot", text: replyText, animate: true },
+        { id: idSeq++, from: "bot", text: replyText },
       ]);
     } catch (err) {
       toast.error("Failed to connect to Health Assistant");
@@ -403,23 +368,7 @@ function ChatPage() {
               </span>
               <div className="max-w-[85%] rounded-3xl rounded-bl-md border border-border bg-card/75 backdrop-blur-xs px-5 py-3.5 shadow-xs transition-all hover:bg-card/90">
                 <div className="text-[15px] leading-relaxed text-foreground">
-                  {m.animate ? (
-                    <span className="whitespace-pre-wrap">
-                      <TypewriterText
-                        text={m.text}
-                        onType={() => scrollToBottom("auto")}
-                        onComplete={() => {
-                          setMessages((currentMsgs) =>
-                            currentMsgs.map((msg) =>
-                              msg.id === m.id ? { ...msg, animate: false } : msg
-                            )
-                          );
-                        }}
-                      />
-                    </span>
-                  ) : (
-                    <FormattedChatMessage text={m.text} />
-                  )}
+                  <FormattedChatMessage text={m.text} />
                 </div>
                 <button
                   type="button"

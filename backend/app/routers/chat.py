@@ -1,4 +1,6 @@
 import os
+import time
+import logging
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -6,6 +8,8 @@ import google.generativeai as genai
 
 from app.config import get_settings
 from app.services.auth import decode_token
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -38,6 +42,7 @@ Your duties:
 
 @router.post("", response_model=ChatResponse)
 async def chat_endpoint(payload: ChatRequest, request: Request):
+    start_time = time.time()
     settings = get_settings()
     api_key = settings.gemini_api_key
     if not api_key:
@@ -66,7 +71,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
                 if user.conditions:
                     user_context += f"\n- Chronic Conditions: {', '.join(user.conditions)}"
         except Exception as e:
-            print(f"Error fetching user profile context for chat: {e}")
+            logger.error(f"Error fetching user profile context for chat: {e}")
 
     personalized_prompt = SYSTEM_PROMPT + user_context
 
@@ -213,9 +218,10 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
             return [{"error": f"Failed to search schemes: {str(err)}"}]
 
     try:
-        # Use gemini-3.5-flash as the primary model (as verified to be active and have quota on this key)
+        model_name = 'gemini-3.1-flash-lite'
+        logger.info(f"Sending chat request to {model_name}...")
         model = genai.GenerativeModel(
-            'gemini-3.5-flash',
+            model_name,
             system_instruction=personalized_prompt,
             tools=[search_hospitals, search_pharmacies_and_medicines, search_schemes]
         )
@@ -230,21 +236,27 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
         last_msg = payload.messages[-1].text
         response = chat_session.send_message(last_msg)
         
+        elapsed_time = time.time() - start_time
+        logger.info(f"Chat request succeeded using {model_name} in {elapsed_time:.4f} seconds.")
         return ChatResponse(reply=response.text)
     except Exception as e:
-        print(f"Chat endpoint error: {e}")
-        # Fallback to gemini-2.0-flash
+        logger.warning(f"Chat endpoint error with gemini-3.1-flash-lite: {e}. Retrying with fallback model...")
+        # Fallback to gemini-3.5-flash
+        fallback_model_name = 'gemini-3.5-flash'
         try:
-            print("Attempting fallback to gemini-2.0-flash...")
             model = genai.GenerativeModel(
-                'gemini-2.0-flash',
+                fallback_model_name,
                 system_instruction=personalized_prompt,
                 tools=[search_hospitals, search_pharmacies_and_medicines, search_schemes]
             )
             chat_session = model.start_chat(history=history, enable_automatic_function_calling=True)
             response = chat_session.send_message(last_msg)
+            
+            elapsed_time = time.time() - start_time
+            logger.info(f"Chat request succeeded using fallback {fallback_model_name} in {elapsed_time:.4f} seconds.")
             return ChatResponse(reply=response.text)
         except Exception as inner_e:
-            print(f"Fallback chat endpoint error: {inner_e}")
+            elapsed_time = time.time() - start_time
+            logger.error(f"Fallback chat endpoint error with {fallback_model_name} after {elapsed_time:.4f} seconds: {inner_e}")
             raise HTTPException(status_code=500, detail=f"Gemini API Error: {str(inner_e)}")
 

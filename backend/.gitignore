@@ -1,3 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches and logs
+.pytest_cache/
+.cache/
+*.log
+
+# Environments and Secrets
 .env
-.env.example
+.venv/
+env/
+venv/
+ENV/
+
+# Firebase Service Account Credentials
+healthbox-*-firebase-adminsdk-*.json
 healthbox-83b67-firebase-adminsdk-fbsvc-9cde0c6b0c.json
+
