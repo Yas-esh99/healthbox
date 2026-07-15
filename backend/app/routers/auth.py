@@ -13,7 +13,7 @@ from app.models import (
     UpdateProfileRequest,
     UserProfile,
 )
-from app.repositories.users import FirestoreUserRepository
+from app.repositories.users import FirestoreUserRepository, InMemoryUserRepository
 from app.services.auth import (
     create_registration_token,
     create_session_token,
@@ -23,8 +23,11 @@ from app.services.auth import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def get_user_repository(request: Request) -> FirestoreUserRepository:
-    return request.app.state.user_repository
+def get_user_repository(request: Request):
+    repository = getattr(request.app.state, "user_repository", None)
+    if repository is None:
+        return InMemoryUserRepository()
+    return repository
 
 
 def _set_cookie(response: Response, key: str, value: str, max_age: int) -> None:

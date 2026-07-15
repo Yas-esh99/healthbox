@@ -1,14 +1,18 @@
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-# Predefined State and District/City lists
-STATES = {
-    "Bihar": ["Patna", "Gaya", "Muzaffarpur", "Bhagalpur"],
-    "Uttar Pradesh": ["Lucknow", "Varanasi", "Gorakhpur", "Prayagraj"],
-    "Rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota"],
-    "Madhya Pradesh": ["Bhopal", "Indore", "Gwalior", "Jabalpur"],
-    "Maharashtra": ["Pune", "Nagpur", "Nashik", "Aurangabad"],
-}
+import json
+import os
+
+# Predefined State and District/City lists loaded from JSON
+_json_path = os.path.join(os.path.dirname(__file__), "states_and_districts.json")
+try:
+    with open(_json_path, "r", encoding="utf-8") as f:
+        STATES = json.load(f)
+except Exception as e:
+    print(f"Warning: Failed to load states_and_districts.json in models.py: {e}")
+    STATES = {}
+
 
 
 def normalize_phone_number(value: str) -> str:

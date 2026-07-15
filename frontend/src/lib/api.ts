@@ -113,3 +113,12 @@ export async function fetchSchemes(): Promise<Scheme[]> {
   return apiFetch<Scheme[]>("/schemes");
 }
 
+export async function fetchStates(): Promise<string[]> {
+  return apiFetch<string[]>("/location/states");
+}
+
+export async function fetchCities(state: string): Promise<string[]> {
+  return apiFetch<string[]>(`/location/cities?state=${encodeURIComponent(state)}`);
+}
+
+

@@ -21,15 +21,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { fetchStates, fetchCities } from "@/lib/api";
+import { Combobox } from "@/components/ui/combobox";
 
 type RegisterSearch = { phone?: string };
 
@@ -41,13 +37,6 @@ export const Route = createFileRoute("/register")({
   component: RegisterPage,
 });
 
-const STATES: Record<string, string[]> = {
-  "Bihar": ["Patna", "Gaya", "Muzaffarpur", "Bhagalpur"],
-  "Uttar Pradesh": ["Lucknow", "Varanasi", "Gorakhpur", "Prayagraj"],
-  "Rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota"],
-  "Madhya Pradesh": ["Bhopal", "Indore", "Gwalior", "Jabalpur"],
-  "Maharashtra": ["Pune", "Nagpur", "Nashik", "Aurangabad"],
-};
 
 const GENDERS = [
   { value: "male", translationKey: "gender_male" as const, icon: Mars },
@@ -85,6 +74,23 @@ function RegisterPage() {
   const [cardNumber, setCardNumber] = useState("");
   const [conditions, setConditions] = useState<string[]>([]);
   const [registering, setRegistering] = useState(false);
+
+  // Dynamic location queries
+  const { data: statesList, error: statesError, isLoading: statesLoading, refetch: refetchStates } = useQuery({
+    queryKey: ["states"],
+    queryFn: fetchStates,
+    staleTime: Infinity,
+  });
+
+  const { data: citiesList, error: citiesError, isLoading: citiesLoading, refetch: refetchCities } = useQuery({
+    queryKey: ["cities", state],
+    queryFn: () => fetchCities(state),
+    enabled: !!state,
+    staleTime: Infinity,
+  });
+
+  const statesOptions = (statesList || []).map((s) => ({ value: s, label: s }));
+  const citiesOptions = (citiesList || []).map((c) => ({ value: c, label: c }));
 
   const goNext = () => {
     setDir("next");
@@ -216,48 +222,71 @@ function RegisterPage() {
                   <Label className="flex items-center gap-2 text-base font-semibold">
                     <MapPin className="h-5 w-5 text-primary" /> {t("state_label")}
                   </Label>
-                  <Select
-                    value={state}
-                    onValueChange={(v) => {
-                      setState(v);
-                      setDistrict("");
-                    }}
-                  >
-                    <SelectTrigger className="!h-14 rounded-2xl border-2 px-4 text-lg">
-                      <SelectValue placeholder={t("placeholder_state")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(STATES).map((s) => (
-                        <SelectItem key={s} value={s} className="py-3 text-base">
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {statesLoading ? (
+                    <div className="flex h-14 w-full items-center justify-between rounded-2xl border-2 px-4 bg-card text-muted-foreground">
+                      <span className="text-base flex items-center gap-2">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                        Loading states...
+                      </span>
+                    </div>
+                  ) : statesError ? (
+                    <button
+                      type="button"
+                      onClick={() => refetchStates()}
+                      className="flex h-14 w-full items-center justify-between rounded-2xl border-2 border-destructive px-4 bg-destructive/10 text-destructive text-base font-medium active:scale-[0.99] transition-all"
+                    >
+                      Error loading states. Tap to retry.
+                    </button>
+                  ) : (
+                    <Combobox
+                      options={statesOptions}
+                      value={state}
+                      onChange={(v) => {
+                        setState(v);
+                        setDistrict("");
+                      }}
+                      placeholder={t("placeholder_state") || "Select state"}
+                      searchPlaceholder="Search state..."
+                      emptyMessage="No state found."
+                      className="!h-14 rounded-2xl border-2 px-4 text-base"
+                    />
+                  )}
                 </div>
 
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2 text-base font-semibold">
                     <MapPin className="h-5 w-5 text-secondary" /> {t("district_label")}
                   </Label>
-                  <Select
-                    value={district}
-                    onValueChange={setDistrict}
-                    disabled={!state}
-                  >
-                    <SelectTrigger className="!h-14 rounded-2xl border-2 px-4 text-lg">
-                      <SelectValue
-                        placeholder={state ? t("placeholder_district") : t("placeholder_state_first")}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(STATES[state] ?? []).map((d) => (
-                        <SelectItem key={d} value={d} className="py-3 text-base">
-                          {d}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {!state ? (
+                    <div className="flex h-14 w-full items-center justify-between rounded-2xl border-2 px-4 bg-card text-muted-foreground opacity-60">
+                      <span className="text-base">{t("placeholder_state_first") || "Choose state first"}</span>
+                    </div>
+                  ) : citiesLoading ? (
+                    <div className="flex h-14 w-full items-center justify-between rounded-2xl border-2 px-4 bg-card text-muted-foreground">
+                      <span className="text-base flex items-center gap-2">
+                        <Loader2 className="h-5 w-5 animate-spin text-secondary" />
+                        Loading cities...
+                      </span>
+                    </div>
+                  ) : citiesError ? (
+                    <button
+                      type="button"
+                      onClick={() => refetchCities()}
+                      className="flex h-14 w-full items-center justify-between rounded-2xl border-2 border-destructive px-4 bg-destructive/10 text-destructive text-base font-medium active:scale-[0.99] transition-all"
+                    >
+                      Error loading cities. Tap to retry.
+                    </button>
+                  ) : (
+                    <Combobox
+                      options={citiesOptions}
+                      value={district}
+                      onChange={setDistrict}
+                      placeholder={t("placeholder_district") || "Select city/district"}
+                      searchPlaceholder="Search city..."
+                      emptyMessage="No city found."
+                      className="!h-14 rounded-2xl border-2 px-4 text-base"
+                    />
+                  )}
                 </div>
               </div>
             )}
