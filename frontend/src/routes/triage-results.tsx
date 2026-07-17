@@ -385,6 +385,10 @@ function TriageResultsPage() {
             <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-sm font-bold text-foreground">
               Condition Stage: {report.condition_stage}
             </div>
+            <p className="mt-4 text-xs font-bold text-destructive flex items-center gap-1.5">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive shrink-0 animate-pulse" />
+              This AI-generated analysis is not a substitute for professional medical advice.
+            </p>
           </div>
         </section>
 
@@ -476,37 +480,63 @@ function TriageResultsPage() {
         {/* 7. CARE NAVIGATION ACTIONS */}
         <section className="mt-7">
           <h3 className="text-lg font-black text-foreground">Find Care Near You</h3>
-          <div className="mt-3 grid grid-cols-1 gap-3">
-            <button
-              type="button"
-              onClick={() => navigate({ to: "/camps" })}
-              className="flex items-center gap-4 rounded-2xl border-2 border-border bg-card p-4 text-left transition active:scale-[0.98] active:bg-muted"
-            >
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-secondary/15 text-secondary">
-                <Landmark className="h-6 w-6" strokeWidth={2.25} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-base font-extrabold text-foreground">Government Hospitals &amp; Camps</p>
-                <p className="text-xs font-semibold text-muted-foreground">Check availability and free health camps</p>
+          
+          {report.matched_schemes && report.matched_schemes.length > 0 && (
+            <div className="mt-4">
+              <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-1">Matched Government Welfare Schemes</h4>
+              <div className="space-y-3">
+                {report.matched_schemes.map((s: any, idx: number) => (
+                  <SchemeCard key={idx} scheme={s} />
+                ))}
               </div>
-            </button>
+            </div>
+          )}
 
-            <button
-              type="button"
-              onClick={() => setShowPrivateHospitals((s) => !s)}
-              className="flex items-center gap-4 rounded-2xl border-2 border-border bg-card p-4 text-left transition active:scale-[0.98] active:bg-muted"
-            >
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                <Hospital className="h-6 w-6" strokeWidth={2.25} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-base font-extrabold text-foreground">Best Private Hospitals</p>
-                <p className="text-xs font-semibold text-muted-foreground">Top-rated private care options nearby</p>
+          {report.nearest_hospitals && report.nearest_hospitals.length > 0 && (
+            <div className="mt-6">
+              <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-1">Recommended Nearest Hospitals</h4>
+              <div className="space-y-3">
+                {report.nearest_hospitals.map((h: any, idx: number) => (
+                  <HospitalCardDynamic key={idx} hospital={h} />
+                ))}
               </div>
-            </button>
-          </div>
+            </div>
+          )}
 
-          {showPrivateHospitals && (
+          {/* Standard Navigation options if not dynamic or alongside them */}
+          {(!report.matched_schemes || report.matched_schemes.length === 0) && (
+            <div className="mt-3 grid grid-cols-1 gap-3">
+              <button
+                type="button"
+                onClick={() => navigate({ to: "/camps" })}
+                className="flex items-center gap-4 rounded-2xl border-2 border-border bg-card p-4 text-left transition active:scale-[0.98] active:bg-muted"
+              >
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-secondary/15 text-secondary">
+                  <Landmark className="h-6 w-6" strokeWidth={2.25} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-base font-extrabold text-foreground">Government Hospitals &amp; Camps</p>
+                  <p className="text-xs font-semibold text-muted-foreground">Check availability and free health camps</p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowPrivateHospitals((s) => !s)}
+                className="flex items-center gap-4 rounded-2xl border-2 border-border bg-card p-4 text-left transition active:scale-[0.98] active:bg-muted"
+              >
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <Hospital className="h-6 w-6" strokeWidth={2.25} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-base font-extrabold text-foreground">Best Private Hospitals</p>
+                  <p className="text-xs font-semibold text-muted-foreground">Top-rated private care options nearby</p>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {showPrivateHospitals && (!report.nearest_hospitals || report.nearest_hospitals.length === 0) && (
             <div className="mt-4 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-bold text-muted-foreground">Sorted by top rated</p>
@@ -518,6 +548,143 @@ function TriageResultsPage() {
             </div>
           )}
         </section>
+      </div>
+    </div>
+  );
+}
+
+function SchemeCard({ scheme }: { scheme: any }) {
+  return (
+    <article className="rounded-2xl border-2 border-border bg-card p-5 mt-3 text-left">
+      <h4 className="text-base font-black leading-snug text-foreground">{scheme.name}</h4>
+
+      <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-secondary/30 bg-secondary/10 px-3 py-1 text-[11px] font-extrabold text-secondary leading-snug">
+        <Landmark className="h-3.5 w-3.5 shrink-0" strokeWidth={2.75} />
+        <span>Eligibility: {scheme.targetDemographic}</span>
+      </div>
+
+      {scheme.requiredDocuments && scheme.requiredDocuments.length > 0 && (
+        <div className="mt-4">
+          <p className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+            <ClipboardList className="h-3.5 w-3.5" /> Required Documents
+          </p>
+          <ul className="mt-1.5 space-y-1 text-sm text-foreground">
+            {scheme.requiredDocuments.map((d: string, idx: number) => (
+              <li key={idx} className="flex gap-2">
+                <span className="text-primary">•</span>
+                {d}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {scheme.benefits && scheme.benefits.length > 0 && (
+        <div className="mt-4">
+          <p className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+            <Activity className="h-3.5 w-3.5" /> Benefits
+          </p>
+          <ul className="mt-1.5 space-y-1 text-sm text-foreground">
+            {scheme.benefits.map((b: string, idx: number) => (
+              <li key={idx} className="flex gap-2">
+                <span className="text-secondary">•</span>
+                {b}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-4">
+        <p className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+          <MapPin className="h-3.5 w-3.5" /> Coverage Limit
+        </p>
+        <p className="mt-1.5 text-sm leading-relaxed text-foreground font-semibold">{scheme.coverageLimit}</p>
+      </div>
+
+      <p className="mt-4 text-sm italic leading-relaxed text-muted-foreground">{scheme.description}</p>
+    </article>
+  );
+}
+
+function HospitalCardDynamic({ hospital }: { hospital: any }) {
+  const handleDirections = () => {
+    toast.success("Opening map directions", { description: hospital.name });
+    if (hospital.google_map_direction_link) {
+      window.open(hospital.google_map_direction_link, "_blank");
+    } else {
+      window.open(`https://maps.google.com/?q=${encodeURIComponent(hospital.name + " " + hospital.address)}`, "_blank");
+    }
+  };
+
+  const handleCall = () => {
+    toast.success("Calling hospital", { description: hospital.number });
+    window.open(`tel:${hospital.number}`, "_self");
+  };
+
+  return (
+    <div className="rounded-2xl border-2 border-border bg-card p-4 mt-3 text-left">
+      <div className="flex items-start gap-3">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+          <Hospital className="h-6 w-6" strokeWidth={2.25} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h3 className="text-base font-extrabold leading-snug text-foreground">{hospital.name}</h3>
+            {hospital.is_govt && (
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary uppercase">
+                Govt
+              </span>
+            )}
+            {hospital.ayushman_active && (
+              <span className="rounded bg-secondary/15 px-1.5 py-0.5 text-[10px] font-bold text-secondary uppercase">
+                PM-JAY
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 text-xs font-semibold text-muted-foreground line-clamp-2">
+            Cures: {hospital.all_disease_it_cures?.slice(0, 3).join(", ")}
+            {hospital.all_disease_it_cures?.length > 3 && "..."}
+          </p>
+        </div>
+        <span className="flex shrink-0 items-center gap-1 rounded-lg bg-success/10 px-2 py-1 text-xs font-black text-success">
+          <Star className="h-3.5 w-3.5 fill-current" />
+          {(hospital.rating || 0.0).toFixed(1)}
+        </span>
+      </div>
+
+      <div className="mt-3 space-y-1.5">
+        <p className="flex items-start gap-2 text-sm text-muted-foreground">
+          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <span className="leading-snug">{hospital.address}</span>
+        </p>
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Phone className="h-4 w-4 shrink-0 text-primary" />
+          <span>{hospital.number}</span>
+        </p>
+        <div className="flex gap-4 text-xs font-bold text-muted-foreground pt-1.5 border-t border-dashed border-border mt-2">
+          <span>Beds Available: <span className="text-foreground font-black">{hospital.beds_available}</span></span>
+          <span>Emergency: <span className={hospital.emergency_24x7 ? "text-success font-black" : "text-muted-foreground font-black"}>{hospital.emergency_24x7 ? "24x7" : "No"}</span></span>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={handleDirections}
+          className="flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow active:scale-[0.99]"
+        >
+          <Navigation className="h-4 w-4" />
+          Directions
+        </button>
+        <button
+          type="button"
+          onClick={handleCall}
+          className="flex items-center justify-center gap-2 rounded-xl border-2 border-border bg-card py-3 text-sm font-bold text-foreground active:bg-muted"
+        >
+          <Phone className="h-4 w-4" />
+          Call Now
+        </button>
       </div>
     </div>
   );

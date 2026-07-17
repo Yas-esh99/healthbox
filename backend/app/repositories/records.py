@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import uuid
-from google.cloud.firestore import Client
+from google.cloud.firestore import Client, FieldFilter
 
 
 class FirestoreRecordsRepository:
@@ -10,7 +10,7 @@ class FirestoreRecordsRepository:
     def get_by_user(self, phone_number: str) -> list[dict]:
         """Fetch all triage records for a user, sorted by created_at descending."""
         records = []
-        query = self.collection.where("phone_number", "==", phone_number)
+        query = self.collection.where(filter=FieldFilter("phone_number", "==", phone_number))
         
         for doc in query.stream():
             payload = doc.to_dict() or {}
@@ -37,7 +37,7 @@ class FirestoreRecordsRepository:
 
     def migrate_user_phone(self, old_phone: str, new_phone: str) -> None:
         """Migrate all triage records from an old phone number to a new one."""
-        query = self.collection.where("phone_number", "==", old_phone)
+        query = self.collection.where(filter=FieldFilter("phone_number", "==", old_phone))
         for doc in query.stream():
             self.collection.document(doc.id).update({"phone_number": new_phone})
 

@@ -12,3 +12,19 @@ class FirestoreSchemesRepository:
             payload["id"] = doc.id
             schemes.append(Scheme.model_validate(payload))
         return schemes
+
+    def search(self, query: str) -> list[Scheme]:
+        schemes = self.get_all()
+        if not query:
+            return schemes
+        q = query.lower().strip()
+        results = []
+        for s in schemes:
+            match = (q in s.name.lower() or 
+                     q in s.description.lower() or 
+                     any(q in b.lower() for b in s.benefits) or
+                     any(q in c.lower() for c in s.eligibleCategories))
+            if match:
+                results.append(s)
+        return results
+

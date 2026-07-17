@@ -16,10 +16,12 @@ import {
   X,
   FileText,
   Loader2,
+  Download,
 } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/records")({
   head: () => ({ meta: [{ title: "My Records" }] }),
@@ -39,6 +41,7 @@ type TriageRecord = {
   doList: string[];
   dontList: string[];
   recommendation: string;
+  rawReport?: any;
 };
 
 const SAMPLE_RECORDS: TriageRecord[] = [
@@ -211,6 +214,7 @@ function mapBackendRecordToTriageRecord(r: any): TriageRecord {
     doList: r.report.approved_protocols || [],
     dontList: r.report.contraindicated_actions || [],
     recommendation: r.report.precautions?.[0] || "Consult a physician if symptoms fail to resolve.",
+    rawReport: r.report,
   };
 }
 
@@ -220,6 +224,386 @@ function RecordsPage() {
   const [records, setRecords] = useState<TriageRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+
+  const handleSinglePDFDownload = async (record: TriageRecord) => {
+    const toastId = toast.loading(`Generating PDF for ${record.title}...`);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      let y = 20;
+
+      // Draw header banner
+      doc.setFillColor(15, 118, 110); // primary teal color
+      doc.rect(0, 0, 210, 40, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("HEALTHBOX CLINICAL SUMMARY REPORT", 15, 18);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`Report ID: ${record.rawReport?.report_id || record.id || "N/A"}`, 15, 26);
+      doc.text(`Saved Timestamp: ${formatDate(record.date)}`, 15, 31);
+
+      y = 50;
+
+      // Emergency Level
+      const risk = (record.risk?.toLowerCase() || "moderate") as RiskTier;
+      const meta = RISK_META[risk] || RISK_META.moderate;
+
+      if (risk === "critical" || risk === "high") {
+        doc.setFillColor(220, 38, 38); // destructive red
+      } else if (risk === "moderate") {
+        doc.setFillColor(245, 158, 11); // warning orange/yellow
+      } else {
+        doc.setFillColor(22, 163, 74); // success green
+      }
+      doc.rect(15, y, 180, 10, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(`EMERGENCY LEVEL: ${meta.label.toUpperCase()}`, 20, y + 6.5);
+
+      y += 18;
+
+      // Primary Diagnosis
+      doc.setTextColor(100, 116, 139);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("PRIMARY DIAGNOSIS", 15, y);
+      y += 6;
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+
+      const diagLines = doc.splitTextToSize(record.title || "Unknown", 180);
+      diagLines.forEach((line: string) => {
+        if (y > 275) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(line, 15, y);
+        y += 8;
+      });
+
+      if (record.rawReport?.confidence_percentage) {
+        doc.setTextColor(15, 118, 110);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text(`Clinical Correlation Confidence: ${record.rawReport.confidence_percentage}`, 15, y);
+        y += 5;
+      }
+
+      if (record.rawReport?.condition_stage) {
+        doc.setTextColor(100, 116, 139);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Condition Stage: ${record.rawReport.condition_stage}`, 15, y);
+        y += 10;
+      }
+
+      // Helper for printing sections
+      const printSectionHeader = (title: string) => {
+        if (y > 250) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.setTextColor(15, 118, 110);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text(title, 15, y);
+        y += 2;
+        doc.setDrawColor(226, 232, 240);
+        doc.line(15, y, 195, y);
+        y += 6;
+      };
+
+      const printBulletList = (items: string[], bulletChar: string, bulletColor: [number, number, number]) => {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        
+        items.forEach((item) => {
+          const lines = doc.splitTextToSize(item, 170);
+          lines.forEach((line: string, index: number) => {
+            if (y > 275) {
+              doc.addPage();
+              y = 20;
+            }
+            if (index === 0) {
+              doc.setTextColor(bulletColor[0], bulletColor[1], bulletColor[2]);
+              doc.setFont("helvetica", "bold");
+              doc.text(bulletChar, 15, y);
+              doc.setFont("helvetica", "normal");
+              doc.setTextColor(51, 65, 85);
+              doc.text(line, 22, y);
+            } else {
+              doc.setTextColor(51, 65, 85);
+              doc.text(line, 22, y);
+            }
+            y += 6;
+          });
+        });
+        y += 4;
+      };
+
+      // 1. Clinical Evidence
+      const evidenceTexts = record.evidence.map(e => e.value);
+      if (evidenceTexts.length > 0) {
+        printSectionHeader("CLINICAL EVIDENCE BASE");
+        printBulletList(evidenceTexts, "-", [100, 116, 139]);
+      }
+
+      // 2. Approved Protocols
+      if (record.doList.length > 0) {
+        printSectionHeader("APPROVED PROTOCOLS");
+        printBulletList(record.doList, "+", [22, 163, 74]);
+      }
+
+      // 3. Contraindicated Actions
+      if (record.dontList.length > 0) {
+        printSectionHeader("CONTRAINDICATED ACTIONS");
+        printBulletList(record.dontList, "x", [220, 38, 38]);
+      }
+
+      // 4. Precautions
+      if (record.recommendation) {
+        printSectionHeader("PRECAUTIONS & RECOMMENDATIONS");
+        printBulletList([record.recommendation], "!", [15, 118, 110]);
+      }
+
+      // 5. Matched Government Schemes
+      const schemes = record.rawReport?.matched_schemes || [];
+      if (schemes.length > 0) {
+        printSectionHeader("ELIGIBLE GOVERNMENT SCHEMES");
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        schemes.forEach((scheme: any) => {
+          const schemeText = `${scheme.name}\n- Target: ${scheme.targetDemographic}\n- Coverage: ${scheme.coverageLimit}`;
+          const lines = doc.splitTextToSize(schemeText, 175);
+          lines.forEach((line: string) => {
+            if (y > 275) {
+              doc.addPage();
+              y = 20;
+            }
+            doc.setTextColor(51, 65, 85);
+            doc.text(line, 15, y);
+            y += 5;
+          });
+          y += 3;
+        });
+        y += 4;
+      }
+
+      // 6. Nearest Hospitals
+      const hospitals = record.rawReport?.nearest_hospitals || [];
+      if (hospitals.length > 0) {
+        printSectionHeader("RECOMMENDED NEAREST HOSPITALS");
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        hospitals.forEach((h: any) => {
+          const hospText = `${h.name} (${h.is_govt ? "Government" : "Private"}) - Rating: ${h.rating}\n- Address: ${h.address}\n- Contact: ${h.number}`;
+          const lines = doc.splitTextToSize(hospText, 175);
+          lines.forEach((line: string) => {
+            if (y > 275) {
+              doc.addPage();
+              y = 20;
+            }
+            doc.setTextColor(51, 65, 85);
+            doc.text(line, 15, y);
+            y += 5;
+          });
+          y += 3;
+        });
+        y += 4;
+      }
+
+      // Disclaimer
+      if (y > 255) {
+        doc.addPage();
+        y = 20;
+      }
+      y += 4;
+      doc.setDrawColor(226, 232, 240);
+      doc.line(15, y, 195, y);
+      y += 6;
+
+      doc.setTextColor(148, 163, 184);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      
+      const disclaimerText = 
+        "Disclaimer: This output constitutes an automated digital triage summary " +
+        "generated from preliminary user input data. It is not an active substitute " +
+        "for formal, in-person diagnostic evaluation or clinical treatment from a " +
+        "certified healthcare professional. This AI-generated analysis is not a " +
+        "substitute for professional medical advice.";
+      
+      const disclaimerLines = doc.splitTextToSize(disclaimerText, 180);
+      disclaimerLines.forEach((line: string) => {
+        if (y > 285) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(line, 15, y);
+        y += 4;
+      });
+
+      toast.dismiss(toastId);
+      doc.save(`HealthBox_Report_${record.rawReport?.report_id || record.id}.pdf`);
+      toast.success("Report PDF downloaded successfully!");
+    } catch (err) {
+      console.error("Single PDF download error:", err);
+      toast.dismiss(toastId);
+      toast.error("Failed to generate and download PDF.");
+    }
+  };
+
+  const handleBulkPDFDownload = async () => {
+    if (records.length === 0) return;
+    setIsDownloadingAll(true);
+    const toastId = toast.loading("Generating combined multi-page PDF report...");
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      records.forEach((record, index) => {
+        if (index > 0) {
+          doc.addPage();
+        }
+
+        let y = 15;
+
+        // Custom running page header
+        doc.setFillColor(15, 118, 110); // primary teal color
+        doc.rect(0, 0, 210, 22, "F");
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text("HEALTHBOX MULTI-RECORD BUNDLED EXPORT", 15, 10);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text(`Report Date: ${formatDate(record.date)} | ID: ${record.rawReport?.report_id || record.id}`, 15, 16);
+
+        y = 32;
+
+        // Title and Risk level
+        const risk = (record.risk?.toLowerCase() || "moderate") as RiskTier;
+        const meta = RISK_META[risk] || RISK_META.moderate;
+
+        doc.setTextColor(15, 23, 42);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text(record.title || "Diagnosis", 15, y);
+        y += 6;
+
+        doc.setFontSize(9);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Emergency Level: ${meta.label} | Chief Complaint: ${record.chiefComplaint}`, 15, y);
+        y += 10;
+
+        // Separator
+        doc.setDrawColor(226, 232, 240);
+        doc.line(15, y, 195, y);
+        y += 8;
+
+        const printSubHeader = (title: string) => {
+          doc.setTextColor(15, 118, 110);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10);
+          doc.text(title, 15, y);
+          y += 4;
+        };
+
+        const printBodyTextList = (items: string[], bullet: string) => {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          doc.setTextColor(51, 65, 85);
+          items.forEach(item => {
+            const lines = doc.splitTextToSize(`${bullet} ${item}`, 175);
+            lines.forEach((line: string) => {
+              doc.text(line, 15, y);
+              y += 5;
+            });
+          });
+          y += 3;
+        };
+
+        // Evidence
+        const evidenceTexts = record.evidence.map(e => e.value);
+        if (evidenceTexts.length > 0) {
+          printSubHeader("Clinical Evidence");
+          printBodyTextList(evidenceTexts, "-");
+        }
+
+        // Approved protocols
+        if (record.doList.length > 0) {
+          printSubHeader("Approved Protocols");
+          printBodyTextList(record.doList, "+");
+        }
+
+        // Contraindicated
+        if (record.dontList.length > 0) {
+          printSubHeader("Contraindicated Actions");
+          printBodyTextList(record.dontList, "x");
+        }
+
+        // Precautions
+        if (record.recommendation) {
+          printSubHeader("Precautions & Recommendations");
+          printBodyTextList([record.recommendation], "!");
+        }
+
+        // Mapped Schemes
+        const schemes = record.rawReport?.matched_schemes || [];
+        if (schemes.length > 0) {
+          printSubHeader("Eligible Welfare Schemes Mapped");
+          const schemeNames = schemes.map((s: any) => `${s.name} (Coverage: ${s.coverageLimit})`);
+          printBodyTextList(schemeNames, "•");
+        }
+
+        // Mapped Hospitals
+        const hospitals = record.rawReport?.nearest_hospitals || [];
+        if (hospitals.length > 0) {
+          printSubHeader("Nearest Recommended Hospitals Mapped");
+          const hospNames = hospitals.map((h: any) => `${h.name} (${h.address})`);
+          printBodyTextList(hospNames, "•");
+        }
+
+        // Footer disclaimer on each page
+        doc.setDrawColor(226, 232, 240);
+        doc.line(15, 276, 195, 276);
+        doc.setTextColor(148, 163, 184);
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7);
+        doc.text("Disclaimer: Automated triage summary. Not a substitute for professional medical advice.", 15, 282);
+      });
+
+      const today = new Date().toISOString().split("T")[0];
+      toast.dismiss(toastId);
+      doc.save(`HealthBox_AllReports_${today}.pdf`);
+      toast.success("All reports downloaded in combined PDF!");
+    } catch (err) {
+      console.error("Bulk PDF download error:", err);
+      toast.dismiss(toastId);
+      toast.error("Failed to generate bulk PDF.");
+    } finally {
+      setIsDownloadingAll(false);
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -286,10 +670,27 @@ function RecordsPage() {
         {!active && (
           <>
             <div className="mb-3 flex items-center justify-between rounded-2xl border-2 border-border bg-card px-4 py-3">
-              <span className="text-sm text-muted-foreground">Total reports</span>
-              <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary">
-                {records.length} saved
-              </span>
+              <div className="flex flex-col text-left">
+                <span className="text-sm text-muted-foreground">Total reports</span>
+                <span className="text-base font-black text-primary mt-0.5">
+                  {records.length} saved
+                </span>
+              </div>
+              {records.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleBulkPDFDownload}
+                  disabled={isDownloadingAll}
+                  className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/95 disabled:opacity-50 transition shadow"
+                >
+                  {isDownloadingAll ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  {isDownloadingAll ? "Generating..." : "Download All"}
+                </button>
+              )}
             </div>
 
             {records.length === 0 ? (
@@ -312,11 +713,11 @@ function RecordsPage() {
                 {records.map((r) => {
                   const meta = RISK_META[r.risk] || RISK_META.moderate;
                   return (
-                    <li key={r.id}>
+                    <li key={r.id} className="relative flex items-center gap-2 rounded-2xl border-2 border-border bg-card p-4 transition hover:bg-muted/30 ring-1 hover:scale-[0.99]">
                       <button
                         type="button"
                         onClick={() => setOpenId(r.id)}
-                        className={`flex w-full items-start gap-3 rounded-2xl border-2 border-border bg-card p-4 text-left transition active:scale-[0.99] active:bg-muted ring-1 ${meta.ring}`}
+                        className="flex-1 flex items-start gap-3 text-left focus:outline-none"
                       >
                         <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${meta.chip}`}>
                           <meta.Icon className="h-5 w-5" />
@@ -338,8 +739,18 @@ function RecordsPage() {
                             </span>
                           </span>
                         </span>
-                        <ChevronRight className="mt-3 h-5 w-5 shrink-0 text-muted-foreground" />
                       </button>
+                      <div className="flex flex-col items-center gap-3 shrink-0 self-center border-l border-border pl-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleSinglePDFDownload(r)}
+                          className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary active:scale-95 transition-all hover:bg-primary/20"
+                          title="Download PDF"
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      </div>
                     </li>
                   );
                 })}
@@ -433,11 +844,45 @@ function RecordsPage() {
             </div>
 
             <section className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4">
-              <h3 className="mb-1 text-sm font-bold uppercase tracking-wider text-primary">
+              <h3 className="mb-1 text-sm font-bold uppercase tracking-wider text-primary text-left">
                 Next Step
               </h3>
-              <p className="text-sm font-medium text-foreground">{active.recommendation}</p>
+              <p className="text-sm font-medium text-foreground text-left">{active.recommendation}</p>
             </section>
+
+            {active.rawReport?.matched_schemes && active.rawReport.matched_schemes.length > 0 && (
+              <section className="rounded-2xl border-2 border-secondary/30 bg-secondary/5 p-4">
+                <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-secondary flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4" /> Eligible Welfare Schemes
+                </h3>
+                <div className="flex flex-col gap-3 text-left">
+                  {active.rawReport.matched_schemes.map((s: any, i: number) => (
+                    <div key={i} className="border-b border-dashed border-border pb-2 last:border-b-0 last:pb-0">
+                      <p className="text-sm font-bold text-foreground leading-snug">{s.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Eligibility: {s.targetDemographic}</p>
+                      <p className="text-xs text-muted-foreground">Coverage: {s.coverageLimit}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {active.rawReport?.nearest_hospitals && active.rawReport.nearest_hospitals.length > 0 && (
+              <section className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4">
+                <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+                  <FolderHeart className="h-4 w-4" /> Recommended Hospitals
+                </h3>
+                <div className="flex flex-col gap-3 text-left">
+                  {active.rawReport.nearest_hospitals.map((h: any, i: number) => (
+                    <div key={i} className="border-b border-dashed border-border pb-2 last:border-b-0 last:pb-0">
+                      <p className="text-sm font-bold text-foreground leading-snug">{h.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Cures: {h.all_disease_it_cures?.join(", ")}</p>
+                      <p className="text-xs text-muted-foreground">Address: {h.address}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <button
               type="button"
