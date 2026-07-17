@@ -243,6 +243,51 @@ class Scheme(BaseModel):
     benefits: list[str] = Field(default_factory=list)
     eligibleCategories: list[str] = Field(default_factory=list)
     requiredDocuments: list[str] = Field(default_factory=list)
+    
+    # New Firestore fields
+    type: str | None = None
+    diseases_covered: list[str] = Field(default_factory=list)
+    scheme_logo: str | None = None
+    documents_required: list[str] = Field(default_factory=list)
+    website_link: str | None = None
+    eligibility: list[str] = Field(default_factory=list)
+    details: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_scheme_fields(cls, data: dict) -> dict:
+        if isinstance(data, dict):
+            # Map diseases_covered -> benefits/eligibleCategories
+            if "diseases_covered" in data:
+                data["benefits"] = data.get("benefits") or data["diseases_covered"]
+                data["eligibleCategories"] = data.get("eligibleCategories") or data["diseases_covered"]
+            # Map documents_required -> requiredDocuments
+            if "documents_required" in data:
+                data["requiredDocuments"] = data.get("requiredDocuments") or data["documents_required"]
+            # Map eligibility -> targetDemographic
+            if "eligibility" in data:
+                if isinstance(data["eligibility"], list):
+                    data["targetDemographic"] = data.get("targetDemographic") or ", ".join(data["eligibility"])
+                elif isinstance(data["eligibility"], str):
+                    data["targetDemographic"] = data.get("targetDemographic") or data["eligibility"]
+            # Map details -> description
+            if "details" in data:
+                data["description"] = data.get("description") or data["details"]
+            # Set defaults for required fields if missing
+            if "description" not in data:
+                data["description"] = "No description available."
+            if "coverageLimit" not in data:
+                # Try to extract coverage limit from details
+                details = data.get("details", "")
+                import re
+                match = re.search(r"INR\s*\d+", details, re.IGNORECASE)
+                if match:
+                    data["coverageLimit"] = f"Up to {match.group(0)}"
+                else:
+                    data["coverageLimit"] = "Check details"
+            if "targetDemographic" not in data:
+                data["targetDemographic"] = "All citizens"
+        return data
 
 
 class Hospital(BaseModel):
@@ -257,6 +302,92 @@ class Hospital(BaseModel):
     ayushman_active: bool
     google_map_direction_link: str
     all_disease_it_cures: list[str] = Field(default_factory=list)
+
+    # New Firestore fields
+    hospital_name: str | None = None
+    type: str | None = None
+    hospital_image: str | None = None
+    years_of_care: str | None = None
+    google_review_ratings: float | None = None
+    file_charges_for_primary_checkup: int | None = None
+    whatsapp_number: str | None = None
+    open: str | None = None
+    descriptions: dict | None = None
+    main_doctors: list[dict] = Field(default_factory=list)
+    mobile_number: str | None = None
+    address_details: dict | None = None
+    about_hospital: dict | None = None
+    services: dict | None = None
+    email: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_hospital_fields(cls, data: dict) -> dict:
+        if isinstance(data, dict):
+            # name <-> hospital_name
+            if "hospital_name" in data and "name" not in data:
+                data["name"] = data["hospital_name"]
+            elif "name" in data and "hospital_name" not in data:
+                data["hospital_name"] = data["name"]
+
+            # address: dict or str
+            addr = data.get("address")
+            if isinstance(addr, dict):
+                data["address_details"] = addr
+                data["address"] = addr.get("location", "")
+                if "google_map_direction_link" not in data:
+                    data["google_map_direction_link"] = addr.get("google_map_direction_link", "")
+            
+            # number <-> mobile_number / whatsapp_number
+            if "mobile_number" in data:
+                data["number"] = data.get("number") or data["mobile_number"]
+            elif "whatsapp_number" in data:
+                data["number"] = data.get("number") or data["whatsapp_number"]
+            
+            # rating <-> google_review_ratings
+            if "google_review_ratings" in data:
+                data["rating"] = data.get("rating") or data["google_review_ratings"]
+            
+            # open <-> emergency_24x7
+            if "open" in data:
+                data["emergency_24x7"] = "24" in str(data["open"])
+            
+            # type <-> is_govt
+            if "type" in data:
+                h_type = str(data["type"]).lower()
+                data["is_govt"] = "govt" in h_type or "semi" in h_type
+            
+            # services -> disease names -> all_disease_it_cures
+            servs = data.get("services")
+            if isinstance(servs, dict):
+                disease_names = servs.get("disease_names")
+                if isinstance(disease_names, list):
+                    cures = []
+                    for d in disease_names:
+                        if isinstance(d, dict) and "disease_name" in d:
+                            cures.append(d["disease_name"])
+                    data["all_disease_it_cures"] = data.get("all_disease_it_cures") or cures
+            
+            # Set sensible defaults
+            if "name" not in data:
+                data["name"] = "Unknown Hospital"
+            if "address" not in data:
+                data["address"] = "No address available"
+            if "number" not in data:
+                data["number"] = "N/A"
+            if "rating" not in data:
+                data["rating"] = 0.0
+            if "beds_available" not in data:
+                data["beds_available"] = 0
+            if "emergency_24x7" not in data:
+                data["emergency_24x7"] = False
+            if "is_govt" not in data:
+                data["is_govt"] = False
+            if "ayushman_active" not in data:
+                data["ayushman_active"] = True  # Default true since these are empanelled hospitals
+            if "google_map_direction_link" not in data or not data["google_map_direction_link"]:
+                data["google_map_direction_link"] = ""
+        return data
 
 
 class Medicine(BaseModel):
@@ -276,8 +407,75 @@ class Pharmacy(BaseModel):
     address: str
     contact: str
     isPremium: bool
-    coordinates: Coordinates
+    coordinates: Coordinates | None = None
     medicines: list[Medicine] = Field(default_factory=list)
+
+    # New Firestore fields
+    pharmacy_name: str | None = None
+    pharmacist_name: str | None = None
+    open_and_close_time: str | None = None
+    mobile_number: str | None = None
+    whatsapp_number: str | None = None
+    email: str | None = None
+    google_review_ratings: float | None = None
+    address_details: dict | None = None
+    description: dict | None = None
+    services: dict | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_pharmacy_fields(cls, data: dict) -> dict:
+        if isinstance(data, dict):
+            # name <-> pharmacy_name
+            if "pharmacy_name" in data and "name" not in data:
+                data["name"] = data["pharmacy_name"]
+            elif "name" in data and "pharmacy_name" not in data:
+                data["pharmacy_name"] = data["name"]
+
+            # address: dict or str
+            addr = data.get("address")
+            if isinstance(addr, dict):
+                data["address_details"] = addr
+                data["address"] = addr.get("location", "")
+            
+            # contact <-> mobile_number / whatsapp_number
+            if "mobile_number" in data:
+                data["contact"] = data.get("contact") or data["mobile_number"]
+            elif "whatsapp_number" in data:
+                data["contact"] = data.get("contact") or data["whatsapp_number"]
+            
+            # medicines <-> description.inventory
+            desc = data.get("description")
+            if isinstance(desc, dict):
+                inventory = desc.get("inventory")
+                if isinstance(inventory, list):
+                    meds = []
+                    for m in inventory:
+                        if isinstance(m, dict) and "medicine_name" in m:
+                            meds.append({
+                                "name": m["medicine_name"],
+                                "price": float(m.get("price") or 0.0),
+                                "inStock": m.get("stock_availability", False)
+                            })
+                    data["medicines"] = data.get("medicines") or meds
+            
+            # isPremium: if billing_discount_percentage > 15, or general store is active
+            if isinstance(desc, dict):
+                data["isPremium"] = desc.get("billing_discount_percentage", 0) > 15
+            
+            # Set sensible defaults
+            if "name" not in data:
+                data["name"] = "Unknown Pharmacy"
+            if "address" not in data:
+                data["address"] = "No address available"
+            if "contact" not in data:
+                data["contact"] = "N/A"
+            if "isPremium" not in data:
+                data["isPremium"] = False
+            if "medicines" not in data:
+                data["medicines"] = []
+        return data
+
 
 
 # --- Triage Records Models ---

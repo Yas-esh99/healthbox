@@ -62,6 +62,15 @@ export interface Scheme {
   benefits: string[];
   eligibleCategories: string[];
   requiredDocuments: string[];
+  
+  // New Firestore fields
+  type?: string;
+  diseases_covered?: string[];
+  scheme_logo?: string;
+  documents_required?: string[];
+  website_link?: string;
+  eligibility?: string[];
+  details?: string;
 }
 
 export interface Hospital {
@@ -76,6 +85,58 @@ export interface Hospital {
   ayushman_active: boolean;
   google_map_direction_link: string;
   all_disease_it_cures: string[];
+
+  // New Firestore fields
+  hospital_name?: string;
+  type?: string;
+  hospital_image?: string;
+  years_of_care?: string;
+  google_review_ratings?: number;
+  file_charges_for_primary_checkup?: number;
+  whatsapp_number?: string;
+  open?: string;
+  descriptions?: {
+    total_staff_with_higher_qualification?: string;
+    appointment_time?: string;
+    medical_services?: string[];
+    doctors_details?: Array<{
+      name?: string;
+      specialization?: string;
+      qualification?: string;
+      experience?: string;
+    }>;
+    specialists_department?: { services?: string[] };
+    doctor_availability?: string;
+  };
+  main_doctors?: Array<{
+    name?: string;
+    qualifications?: string;
+    years_of_experience?: number;
+  }>;
+  mobile_number?: string;
+  address_details?: {
+    location?: string;
+    pincode?: string;
+    google_map_direction_link?: string;
+  };
+  about_hospital?: {
+    facility?: string[];
+    room_quality?: Array<{
+      room_type?: string;
+      amenities?: string[];
+      bed_charges_per_day?: number;
+    }>;
+  };
+  services?: {
+    all_machine?: boolean;
+    ambulance?: boolean;
+    experties?: string[];
+    disease_names?: Array<{
+      disease_name?: string;
+      treatment_price?: number;
+    }>;
+  };
+  email?: string;
 }
 
 export interface Medicine {
@@ -95,8 +156,45 @@ export interface Pharmacy {
   address: string;
   contact: string;
   isPremium: boolean;
-  coordinates: Coordinates;
+  coordinates?: Coordinates | null;
   medicines: Medicine[];
+
+  // New Firestore fields
+  pharmacy_name?: string;
+  pharmacist_name?: string;
+  open_and_close_time?: string;
+  mobile_number?: string;
+  whatsapp_number?: string;
+  email?: string;
+  google_review_ratings?: number;
+  address_details?: {
+    location?: string;
+    pincode?: string;
+  };
+  description?: {
+    delivery_service?: {
+      is_available?: boolean;
+      terms?: string;
+    };
+    billing_discount_percentage?: number;
+    pharmacist_details?: {
+      name?: string;
+      qualification?: string;
+      experience_in_years?: number;
+    };
+    inventory?: Array<{
+      medicine_name?: string;
+      price?: number;
+      stock_availability?: boolean;
+    }>;
+    types_of_medicine_available?: string[];
+    total_staff?: number;
+  };
+  services?: {
+    medical_and_general_store?: boolean;
+    delivery?: boolean;
+    pharmacist_consultation?: boolean;
+  };
 }
 
 // --- Fetch Functions ---
