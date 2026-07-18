@@ -355,7 +355,7 @@ class Hospital(BaseModel):
             # type <-> is_govt
             if "type" in data:
                 h_type = str(data["type"]).lower()
-                data["is_govt"] = "govt" in h_type or "semi" in h_type
+                data["is_govt"] = "gov" in h_type or "semi" in h_type
             
             # services -> disease names -> all_disease_it_cures
             servs = data.get("services")

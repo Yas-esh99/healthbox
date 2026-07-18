@@ -48,7 +48,7 @@ export const validateTemp = (val: string): string | undefined => {
   if (isNaN(num)) {
     return "Temperature must be a valid number";
   }
-  
+
   // Accept either Celsius (30-45) or Fahrenheit (86-113)
   const isC = num >= 30 && num <= 45;
   const isF = num >= 86 && num <= 113;
@@ -103,15 +103,15 @@ export const validateBp = (val: string): string | undefined => {
   if (!trimmed) {
     return undefined; // Optional field
   }
-  
+
   const match = trimmed.match(/^(\d+)\s*\/\s*(\d+)$/);
   if (!match) {
     return "Format must be Systolic/Diastolic (e.g., 120/80)";
   }
-  
+
   const systolic = parseInt(match[1], 10);
   const diastolic = parseInt(match[2], 10);
-  
+
   if (systolic < 60 || systolic > 250) {
     return "Systolic BP must be between 60 and 250 mmHg";
   }
@@ -126,21 +126,21 @@ export const validateBp = (val: string): string | undefined => {
  */
 export const validateForm = (values: FormValues): FormErrors => {
   const errors: FormErrors = {};
-  
+
   const ageErr = validateAge(values.age);
   if (ageErr) errors.age = ageErr;
-  
+
   const tempErr = validateTemp(values.temp);
   if (tempErr) errors.temp = tempErr;
-  
+
   const hrErr = validateHeartRate(values.heartRate);
   if (hrErr) errors.heartRate = hrErr;
-  
+
   const spo2Err = validateSpo2(values.spo2);
   if (spo2Err) errors.spo2 = spo2Err;
-  
+
   const bpErr = validateBp(values.bp);
   if (bpErr) errors.bp = bpErr;
-  
+
   return errors;
 };

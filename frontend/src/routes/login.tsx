@@ -8,10 +8,7 @@ import { useTranslation } from "@/lib/language";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
-    meta: [
-      { title: "Login" },
-      { name: "description", content: "Sign in with your mobile number" },
-    ],
+    meta: [{ title: "Login" }, { name: "description", content: "Sign in with your mobile number" }],
   }),
   component: LoginPage,
 });
@@ -60,19 +57,12 @@ function LoginPage() {
           <div className="grid h-20 w-20 place-items-center rounded-3xl bg-primary/10 text-primary">
             <Smartphone className="h-10 w-10" />
           </div>
-          <h1 className="mt-5 text-2xl font-bold text-foreground">
-            {t("login_title")}
-          </h1>
-          <p className="mt-2 text-base text-muted-foreground">
-            {t("login_subtitle")}
-          </p>
+          <h1 className="mt-5 text-2xl font-bold text-foreground">{t("login_title")}</h1>
+          <p className="mt-2 text-base text-muted-foreground">{t("login_subtitle")}</p>
         </div>
 
         <div className="mt-8">
-          <label
-            htmlFor="phone"
-            className="mb-2 block text-sm font-semibold text-foreground"
-          >
+          <label htmlFor="phone" className="mb-2 block text-sm font-semibold text-foreground">
             {t("login_label")}
           </label>
           <div className="flex h-16 w-full items-center overflow-hidden rounded-2xl border-2 border-border bg-card focus-within:border-primary">
@@ -91,9 +81,7 @@ function LoginPage() {
               className="h-full flex-1 bg-transparent px-4 text-2xl font-semibold tracking-wider text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
             />
           </div>
-          <p className="mt-2 text-right text-sm text-muted-foreground">
-            {phone.length} / 10
-          </p>
+          <p className="mt-2 text-right text-sm text-muted-foreground">{phone.length} / 10</p>
         </div>
 
         <div className="mt-auto pt-8">
@@ -105,7 +93,7 @@ function LoginPage() {
               "flex h-16 w-full items-center justify-center rounded-2xl text-xl font-semibold transition-all active:scale-[0.99]",
               isValid && !loading
                 ? "bg-primary text-primary-foreground shadow-md"
-                : "cursor-not-allowed bg-muted text-muted-foreground"
+                : "cursor-not-allowed bg-muted text-muted-foreground",
             )}
           >
             {loading ? (

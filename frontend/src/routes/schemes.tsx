@@ -26,7 +26,11 @@ function SchemesPage() {
   const [scanned, setScanned] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const { t } = useTranslation();
-  const { data: schemes = [], isLoading, error } = useQuery<Scheme[]>({
+  const {
+    data: schemes = [],
+    isLoading,
+    error,
+  } = useQuery<Scheme[]>({
     queryKey: ["schemes"],
     queryFn: fetchSchemes,
   });
@@ -48,11 +52,11 @@ function SchemesPage() {
       <div className="mx-auto w-full max-w-md px-5 pt-6">
         {/* Header */}
         <header className="text-center">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Welfare</p>
-          <h1 className="mt-1 text-2xl font-black text-foreground">{t("govt_schemes_title")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t("schemes_subtitle")}
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Welfare
           </p>
+          <h1 className="mt-1 text-2xl font-black text-foreground">{t("govt_schemes_title")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t("schemes_subtitle")}</p>
         </header>
 
         {/* Simple Upload Card */}
@@ -63,9 +67,7 @@ function SchemesPage() {
             </span>
             <div>
               <h3 className="text-sm font-bold text-foreground">{t("upload_ayushman")}</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                PDF or image format up to 5MB
-              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">PDF or image format up to 5MB</p>
             </div>
             <button
               type="button"
@@ -74,7 +76,13 @@ function SchemesPage() {
             >
               {t("choose_document")}
             </button>
-            <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={onPick} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*,application/pdf"
+              className="hidden"
+              onChange={onPick}
+            />
           </div>
         </div>
 
@@ -102,9 +110,7 @@ function SchemesPage() {
           ) : !scanned ? (
             <div className="rounded-2xl border-2 border-dashed border-border bg-card p-6 text-center text-muted-foreground">
               <ShieldCheck className="mx-auto h-9 w-9 text-muted-foreground" />
-              <p className="mt-3 text-sm">
-                Upload your health card to see matches.
-              </p>
+              <p className="mt-3 text-sm">Upload your health card to see matches.</p>
             </div>
           ) : schemes.length === 0 ? (
             <div className="rounded-2xl border-2 border-border bg-card p-6 text-center text-muted-foreground">
@@ -140,9 +146,10 @@ function SchemeCard({ scheme }: { scheme: Scheme }) {
 
   const docs = scheme.documents_required || scheme.requiredDocuments;
   const benefits = scheme.diseases_covered || scheme.benefits;
-  const eligibilityText = scheme.eligibility && scheme.eligibility.length > 0 
-    ? scheme.eligibility.join(", ") 
-    : scheme.targetDemographic;
+  const eligibilityText =
+    scheme.eligibility && scheme.eligibility.length > 0
+      ? scheme.eligibility.join(", ")
+      : scheme.targetDemographic;
 
   return (
     <article className="rounded-2xl border-2 border-border bg-card p-5">
@@ -228,11 +235,15 @@ function SchemeCard({ scheme }: { scheme: Scheme }) {
           <p className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
             <MapPin className="h-3.5 w-3.5" /> {t("coverage_limit")}
           </p>
-          <p className="mt-1.5 text-sm leading-relaxed text-foreground font-semibold">{scheme.coverageLimit}</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-foreground font-semibold">
+            {scheme.coverageLimit}
+          </p>
         </div>
       )}
 
-      <p className="mt-4 text-sm italic leading-relaxed text-muted-foreground">{scheme.description}</p>
+      <p className="mt-4 text-sm italic leading-relaxed text-muted-foreground">
+        {scheme.description}
+      </p>
 
       <button
         type="button"

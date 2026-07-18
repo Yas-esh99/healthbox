@@ -1,6 +1,7 @@
-const API_BASE_URL = typeof window !== "undefined" 
-  ? `http://${window.location.hostname}:8000/api/v1` 
-  : "http://localhost:8000/api/v1";
+const API_BASE_URL =
+  typeof window !== "undefined"
+    ? `http://${window.location.hostname}:8000/api/v1`
+    : "http://localhost:8000/api/v1";
 
 export class ApiError extends Error {
   status: number;
@@ -16,7 +17,7 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
-  
+
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -62,7 +63,7 @@ export interface Scheme {
   benefits: string[];
   eligibleCategories: string[];
   requiredDocuments: string[];
-  
+
   // New Firestore fields
   type?: string;
   diseases_covered?: string[];
@@ -219,4 +220,14 @@ export async function fetchCities(state: string): Promise<string[]> {
   return apiFetch<string[]>(`/location/cities?state=${encodeURIComponent(state)}`);
 }
 
+export interface HeatmapDataPoint {
+  state: string;
+  district: string;
+  disease: string;
+  cases_count: number;
+}
 
+export async function fetchHeatmap(disease?: string): Promise<HeatmapDataPoint[]> {
+  const query = disease ? `?disease=${encodeURIComponent(disease)}` : "";
+  return apiFetch<HeatmapDataPoint[]>(`/records/heatmap${query}`);
+}

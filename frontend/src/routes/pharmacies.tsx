@@ -31,7 +31,11 @@ export const Route = createFileRoute("/pharmacies")({
 function PharmaciesPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { data: pharmacies = [], isLoading, error } = useQuery<Pharmacy[]>({
+  const {
+    data: pharmacies = [],
+    isLoading,
+    error,
+  } = useQuery<Pharmacy[]>({
     queryKey: ["pharmacies"],
     queryFn: fetchPharmacies,
   });
@@ -59,9 +63,7 @@ function PharmaciesPage() {
 
         <header className="mt-3">
           <h1 className="text-2xl font-black text-foreground">{t("find_pharmacy_title")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t("pharmacy_subtitle")}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("pharmacy_subtitle")}</p>
         </header>
 
         <div className="mt-5 space-y-3">
@@ -79,9 +81,7 @@ function PharmaciesPage() {
               <p className="text-sm font-medium">No pharmacies found in database.</p>
             </div>
           ) : (
-            pharmacies.map((p) => (
-              <PharmacyCard key={p.id} pharmacy={p} />
-            ))
+            pharmacies.map((p) => <PharmacyCard key={p.id} pharmacy={p} />)
           )}
         </div>
       </div>
@@ -100,7 +100,10 @@ function PharmacyCard({ pharmacy }: { pharmacy: Pharmacy }) {
     if (coords && coords.latitude && coords.longitude) {
       window.open(`https://maps.google.com/?q=${coords.latitude},${coords.longitude}`, "_blank");
     } else {
-      window.open(`https://maps.google.com/?q=${encodeURIComponent(pharmacy.name + " " + pharmacy.address)}`, "_blank");
+      window.open(
+        `https://maps.google.com/?q=${encodeURIComponent(pharmacy.name + " " + pharmacy.address)}`,
+        "_blank",
+      );
     }
   };
 
@@ -163,7 +166,8 @@ function PharmacyCard({ pharmacy }: { pharmacy: Pharmacy }) {
         <p className="flex items-start gap-2.5 text-sm text-muted-foreground">
           <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <span className="leading-snug">
-            {pharmacy.address} {pharmacy.address_details?.pincode && `(Pincode: ${pharmacy.address_details.pincode})`}
+            {pharmacy.address}{" "}
+            {pharmacy.address_details?.pincode && `(Pincode: ${pharmacy.address_details.pincode})`}
           </span>
         </p>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
@@ -193,7 +197,8 @@ function PharmacyCard({ pharmacy }: { pharmacy: Pharmacy }) {
             {pharmacy.description?.pharmacist_details && (
               <span>
                 {" "}
-                ({pharmacy.description.pharmacist_details.qualification} • {pharmacy.description.pharmacist_details.experience_in_years} yrs exp)
+                ({pharmacy.description.pharmacist_details.qualification} •{" "}
+                {pharmacy.description.pharmacist_details.experience_in_years} yrs exp)
               </span>
             )}
           </div>
@@ -225,16 +230,21 @@ function PharmacyCard({ pharmacy }: { pharmacy: Pharmacy }) {
       {pharmacy.services?.delivery && pharmacy.description?.delivery_service?.is_available && (
         <p className="mt-2 text-xs font-bold text-success flex items-center gap-1">
           <Check className="h-3.5 w-3.5" />
-          <span>Delivery Available: <span className="font-black">{pharmacy.description.delivery_service.terms}</span></span>
+          <span>
+            Delivery Available:{" "}
+            <span className="font-black">{pharmacy.description.delivery_service.terms}</span>
+          </span>
         </p>
       )}
 
       {/* Medicine inventory available */}
-      {pharmacy.description?.types_of_medicine_available && pharmacy.description.types_of_medicine_available.length > 0 && (
-        <div className="mt-3 text-xs text-muted-foreground">
-          <span className="font-bold text-foreground">Stocked Types:</span> {pharmacy.description.types_of_medicine_available.join(", ")}
-        </div>
-      )}
+      {pharmacy.description?.types_of_medicine_available &&
+        pharmacy.description.types_of_medicine_available.length > 0 && (
+          <div className="mt-3 text-xs text-muted-foreground">
+            <span className="font-bold text-foreground">Stocked Types:</span>{" "}
+            {pharmacy.description.types_of_medicine_available.join(", ")}
+          </div>
+        )}
 
       {/* Medicines Pricing section */}
       {pharmacy.medicines && pharmacy.medicines.length > 0 && (

@@ -8,6 +8,7 @@ from google.genai import types
 from google.genai import errors
 
 from app.config import get_settings
+from app.services.care_matching import enrich_diagnosis
 
 logger = logging.getLogger(__name__)
 
@@ -158,21 +159,39 @@ async def analyze_report(
             detail="Inconsistent report, please consult a doctor."
         )
         
-    # 3. Lookup matching schemes and hospitals
-    schemes_repo = request.app.state.schemes_repository
-    hospitals_repo = request.app.state.hospitals_repository
+    # 3. Enrich diagnosis
+    enrichment = enrich_diagnosis(
+        primary_diagnosis=analysis.primary_diagnosis,
+        schemes_repo=request.app.state.schemes_repository,
+        hospitals_repo=request.app.state.hospitals_repository,
+        records_repo=request.app.state.records_repository,
+        users_repo=request.app.state.user_repository,
+        api_key=settings.gemini_api_key
+    )
     
-    matched_schemes = []
-    nearest_hospitals = []
-    
-    if schemes_repo:
-        matched_schemes = schemes_repo.search(analysis.primary_diagnosis)
-    if hospitals_repo:
-        nearest_hospitals = hospitals_repo.search(analysis.primary_diagnosis)
-        
     # 4. Construct final payload
     report_data = analysis.model_dump()
-    report_data["matched_schemes"] = [s.model_dump() for s in matched_schemes]
-    report_data["nearest_hospitals"] = [h.model_dump() for h in nearest_hospitals]
+    report_data.update(enrichment)
     
     return report_data
+
+
+class EnrichRequest(BaseModel):
+    primary_diagnosis: str
+
+
+@router.post("/enrich")
+async def enrich_report_diagnosis(
+    payload: EnrichRequest,
+    request: Request
+):
+    settings = get_settings()
+    enrichment = enrich_diagnosis(
+        primary_diagnosis=payload.primary_diagnosis,
+        schemes_repo=request.app.state.schemes_repository,
+        hospitals_repo=request.app.state.hospitals_repository,
+        records_repo=request.app.state.records_repository,
+        users_repo=request.app.state.user_repository,
+        api_key=settings.gemini_api_key
+    )
+    return enrichment
