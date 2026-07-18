@@ -128,24 +128,62 @@ function SchemesPage() {
 
 function SchemeCard({ scheme }: { scheme: Scheme }) {
   const { t } = useTranslation();
+
+  const handleApply = () => {
+    if (scheme.website_link) {
+      toast.success("Redirecting to official website", { description: scheme.name });
+      window.open(scheme.website_link, "_blank");
+    } else {
+      toast.success("Starting application", { description: scheme.name });
+    }
+  };
+
+  const docs = scheme.documents_required || scheme.requiredDocuments;
+  const benefits = scheme.diseases_covered || scheme.benefits;
+  const eligibilityText = scheme.eligibility && scheme.eligibility.length > 0 
+    ? scheme.eligibility.join(", ") 
+    : scheme.targetDemographic;
+
   return (
     <article className="rounded-2xl border-2 border-border bg-card p-5">
-      <h3 className="text-base font-black leading-snug text-foreground">{scheme.name}</h3>
+      {/* Title & Logo Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h3 className="text-base font-black leading-snug text-foreground">{scheme.name}</h3>
+            {scheme.type && (
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary uppercase">
+                {scheme.type}
+              </span>
+            )}
+          </div>
+        </div>
+        {scheme.scheme_logo && (
+          <img
+            src={scheme.scheme_logo}
+            alt={scheme.name}
+            className="h-10 w-10 shrink-0 rounded-lg object-contain bg-muted p-1"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+        )}
+      </div>
 
       {/* Eligibility Badge */}
       <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-secondary/30 bg-secondary/10 px-3 py-1 text-[11px] font-extrabold text-secondary leading-snug">
         <ShieldCheck className="h-3.5 w-3.5 shrink-0" strokeWidth={2.75} />
-        <span>Eligibility: {scheme.targetDemographic}</span>
+        <span>Eligibility: {eligibilityText}</span>
       </div>
 
       {/* Required Documents */}
-      {scheme.requiredDocuments && scheme.requiredDocuments.length > 0 && (
+      {docs && docs.length > 0 && (
         <div className="mt-4">
           <p className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
             <FileText className="h-3.5 w-3.5" /> {t("required_docs")}
           </p>
           <ul className="mt-1.5 space-y-1 text-sm text-foreground">
-            {scheme.requiredDocuments.map((d, idx) => (
+            {docs.map((d, idx) => (
               <li key={idx} className="flex gap-2">
                 <span className="text-primary">•</span>
                 {d}
@@ -155,14 +193,14 @@ function SchemeCard({ scheme }: { scheme: Scheme }) {
         </div>
       )}
 
-      {/* Benefits */}
-      {scheme.benefits && scheme.benefits.length > 0 && (
+      {/* Diseases Covered / Benefits */}
+      {benefits && benefits.length > 0 && (
         <div className="mt-4">
           <p className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
-            <Activity className="h-3.5 w-3.5" /> {t("scheme_benefits")}
+            <Activity className="h-3.5 w-3.5" /> Diseases Covered
           </p>
           <ul className="mt-1.5 space-y-1 text-sm text-foreground">
-            {scheme.benefits.map((b, idx) => (
+            {benefits.map((b, idx) => (
               <li key={idx} className="flex gap-2">
                 <span className="text-secondary">•</span>
                 {b}
@@ -185,21 +223,23 @@ function SchemeCard({ scheme }: { scheme: Scheme }) {
       )}
 
       {/* Coverage Limit */}
-      <div className="mt-4">
-        <p className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
-          <MapPin className="h-3.5 w-3.5" /> {t("coverage_limit")}
-        </p>
-        <p className="mt-1.5 text-sm leading-relaxed text-foreground font-semibold">{scheme.coverageLimit}</p>
-      </div>
+      {scheme.coverageLimit && (
+        <div className="mt-4">
+          <p className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5" /> {t("coverage_limit")}
+          </p>
+          <p className="mt-1.5 text-sm leading-relaxed text-foreground font-semibold">{scheme.coverageLimit}</p>
+        </div>
+      )}
 
       <p className="mt-4 text-sm italic leading-relaxed text-muted-foreground">{scheme.description}</p>
 
       <button
         type="button"
-        onClick={() => toast.success("Starting application", { description: scheme.name })}
+        onClick={handleApply}
         className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-bold text-primary-foreground shadow active:scale-[0.99]"
       >
-        {t("apply_now")}
+        {scheme.website_link ? "Visit Scheme Website" : t("apply_now")}
         <ArrowRight className="h-4 w-4" />
       </button>
     </article>

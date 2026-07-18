@@ -11,7 +11,7 @@ from app.repositories.pharmacies import FirestorePharmaciesRepository
 from app.repositories.schemes import FirestoreSchemesRepository
 from app.repositories.records import FirestoreRecordsRepository
 from app.repositories.location import LocationRepository
-from app.routers import auth, hospitals, pharmacies, schemes, records, chat, location
+from app.routers import auth, hospitals, pharmacies, schemes, records, chat, location, reports
 from app.routers.location import seed_locations_if_empty
 
 
@@ -63,6 +63,7 @@ app.include_router(schemes.router, prefix=settings.api_v1_prefix)
 app.include_router(records.router, prefix=settings.api_v1_prefix)
 app.include_router(chat.router, prefix=settings.api_v1_prefix)
 app.include_router(location.router, prefix=settings.api_v1_prefix)
+app.include_router(reports.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")

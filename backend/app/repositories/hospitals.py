@@ -12,3 +12,18 @@ class FirestoreHospitalsRepository:
             payload["id"] = doc.id
             hospitals.append(Hospital.model_validate(payload))
         return hospitals
+
+    def search(self, query: str) -> list[Hospital]:
+        hospitals = self.get_all()
+        if not query:
+            return hospitals
+        q = query.lower().strip()
+        results = []
+        for h in hospitals:
+            match = (q in h.name.lower() or 
+                     q in h.address.lower() or 
+                     any(q in d.lower() for d in h.all_disease_it_cures))
+            if match:
+                results.append(h)
+        return results
+

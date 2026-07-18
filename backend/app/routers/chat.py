@@ -4,7 +4,8 @@ import logging
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from app.config import get_settings
 from app.services.auth import decode_token
@@ -47,7 +48,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
     api_key = settings.gemini_api_key
     if not api_key:
         raise HTTPException(status_code=500, detail="gemini_api_key is not set in Settings/.env file.")
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
     
     # 1. Fetch user details if logged in for personalization
     session_token = request.cookies.get(settings.auth_cookie_name)
@@ -96,19 +97,12 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
         """
         try:
             hospitals_repo = request.app.state.hospitals_repository
-            hospitals = hospitals_repo.get_all()
+            hospitals = hospitals_repo.search(query)
             results = []
-            q = query.lower().strip() if query else ""
             st = state.lower().strip() if state else ""
             ct = city.lower().strip() if city else ""
             
             for h in hospitals:
-                if q:
-                    match = (q in h.name.lower() or 
-                             q in h.address.lower() or 
-                             any(q in d.lower() for d in h.all_disease_it_cures))
-                    if not match:
-                        continue
                 if st and st not in h.address.lower():
                     continue
                 if ct and ct not in h.address.lower():
@@ -191,18 +185,10 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
         """
         try:
             schemes_repo = request.app.state.schemes_repository
-            schemes = schemes_repo.get_all()
+            schemes = schemes_repo.search(query)
             results = []
-            q = query.lower().strip() if query else ""
             
             for s in schemes:
-                if q:
-                    match = (q in s.name.lower() or 
-                             q in s.description.lower() or 
-                             any(q in b.lower() for b in s.benefits) or
-                             any(q in c.lower() for c in s.eligibleCategories))
-                    if not match:
-                        continue
                         
                 results.append({
                     "name": s.name,
@@ -220,18 +206,25 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
     try:
         model_name = 'gemini-3.1-flash-lite'
         logger.info(f"Sending chat request to {model_name}...")
-        model = genai.GenerativeModel(
-            model_name,
-            system_instruction=personalized_prompt,
-            tools=[search_hospitals, search_pharmacies_and_medicines, search_schemes]
-        )
         
         history = []
         for msg in payload.messages[:-1]:
             role = "model" if msg.role == "bot" else "user"
-            history.append({"role": role, "parts": [msg.text]})
+            history.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=msg.text)]
+                )
+            )
             
-        chat_session = model.start_chat(history=history, enable_automatic_function_calling=True)
+        chat_session = client.chats.create(
+            model=model_name,
+            history=history,
+            config=types.GenerateContentConfig(
+                system_instruction=personalized_prompt,
+                tools=[search_hospitals, search_pharmacies_and_medicines, search_schemes]
+            )
+        )
         
         last_msg = payload.messages[-1].text
         response = chat_session.send_message(last_msg)
@@ -244,12 +237,14 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
         # Fallback to gemini-3.5-flash
         fallback_model_name = 'gemini-3.5-flash'
         try:
-            model = genai.GenerativeModel(
-                fallback_model_name,
-                system_instruction=personalized_prompt,
-                tools=[search_hospitals, search_pharmacies_and_medicines, search_schemes]
+            chat_session = client.chats.create(
+                model=fallback_model_name,
+                history=history,
+                config=types.GenerateContentConfig(
+                    system_instruction=personalized_prompt,
+                    tools=[search_hospitals, search_pharmacies_and_medicines, search_schemes]
+                )
             )
-            chat_session = model.start_chat(history=history, enable_automatic_function_calling=True)
             response = chat_session.send_message(last_msg)
             
             elapsed_time = time.time() - start_time

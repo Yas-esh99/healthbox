@@ -5,4 +5,4 @@ PyJWT==2.10.1
 python-multipart==0.0.20
 uvicorn[standard]==0.34.0
 google-auth<3.0.0,>=2.23.0
-google-generativeai==0.8.4
+google-genai==1.73.1
