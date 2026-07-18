@@ -18,11 +18,18 @@ class FirestoreHospitalsRepository:
         if not query:
             return hospitals
         q = query.lower().strip()
+        query_tokens = [t.strip() for t in q.replace("&", " ").replace("and", " ").split() if t.strip()]
         results = []
         for h in hospitals:
-            match = (q in h.name.lower() or 
-                     q in h.address.lower() or 
-                     any(q in d.lower() for d in h.all_disease_it_cures))
+            name_lower = h.name.lower()
+            addr_lower = h.address.lower()
+            match = q in name_lower or name_lower in q or q in addr_lower or addr_lower in q
+            if not match:
+                for d in h.all_disease_it_cures:
+                    d_lower = d.lower()
+                    if q in d_lower or d_lower in q or any(tok in d_lower for tok in query_tokens):
+                        match = True
+                        break
             if match:
                 results.append(h)
         return results

@@ -20,66 +20,29 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
-
-type RiskTier = "low" | "moderate" | "high" | "critical";
+import { DiseaseHeatmapView } from "@/components/disease-heatmap";
+import { apiFetch, HeatmapDataPoint, Hospital as HospitalData, Scheme } from "@/lib/api";
 
 export const Route = createFileRoute("/triage-results")({
   head: () => ({ meta: [{ title: "Clinical Summary Report" }] }),
   component: TriageResultsPage,
 });
 
-const RISK_CONFIG: Record<
-  RiskTier,
-  { label: string; block: string }
-> = {
+type RiskTier = "low" | "moderate" | "high" | "critical";
+
+const RISK_CONFIG: Record<RiskTier, { label: string; block: string }> = {
   low: { label: "Low Risk", block: "bg-success text-success-foreground" },
   moderate: { label: "Moderate Risk", block: "bg-warning text-warning-foreground" },
   high: { label: "High Risk", block: "bg-destructive text-destructive-foreground" },
   critical: { label: "Critical Emergency", block: "bg-destructive text-destructive-foreground" },
 };
 
-const PRIVATE_HOSPITALS = [
-  {
-    name: "Apollo Hospitals",
-    specialty: "Multi-Specialty · 24x7 Emergency",
-    distance: "2.1 km away",
-    rating: 4.8,
-    address: "Bannerghatta Road, Bangalore",
-    phone: "+91 80 4030 4050",
-  },
-  {
-    name: "Fortis Healthcare",
-    specialty: "Cardiac & Orthopedic Care",
-    distance: "3.4 km away",
-    rating: 4.7,
-    address: "Cunningham Road, Bangalore",
-    phone: "+91 80 4195 4444",
-  },
-  {
-    name: "Manipal Hospital",
-    specialty: "Oncology & Critical Care",
-    distance: "5.2 km away",
-    rating: 4.6,
-    address: "Old Airport Road, Bangalore",
-    phone: "+91 80 2502 4444",
-  },
-  {
-    name: "Narayana Health",
-    specialty: "Affordable Multi-Specialty",
-    distance: "6.8 km away",
-    rating: 4.5,
-    address: "Hosur Road, Bangalore",
-    phone: "+91 80 7123 4567",
-  },
-];
-
 function TriageResultsPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [showPrivateHospitals, setShowPrivateHospitals] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // @ts-ignore
+  // @ts-expect-error location.state is typed as unknown
   const report = location.state?.report || {
     report_id: "HB-2026-9941",
     emergency_level: "moderate",
@@ -90,26 +53,84 @@ function TriageResultsPage() {
       "Fever persisting > 48 hours",
       "Body Temperature 101.2°F",
       "Heart Rate 96 BPM · SpO₂ 97%",
-      "Dermal boundary irritation detected"
+      "Dermal boundary irritation detected",
     ],
     approved_protocols: [
       "Maintain adequate hydration with boiled water",
       "Rest completely and avoid exertion",
       "Take paracetamol as per label for fever",
-      "Eat light, easily digestible meals"
+      "Eat light, easily digestible meals",
     ],
     contraindicated_actions: [
       "Do not self-prescribe unverified antibiotics",
       "Do not engage in heavy physical strain",
       "Avoid cold exposure and unfiltered water",
-      "Do not ignore worsening symptoms"
+      "Do not ignore worsening symptoms",
     ],
     precautions: [
       "Record body temperature at 6-hour intervals and note any spikes.",
       "Continue home care with rest and fluids; monitor appetite.",
-      "Consult a physical physician if symptoms fail to resolve within 48 hours."
-    ]
+      "Consult a physical physician if symptoms fail to resolve within 48 hours.",
+    ],
   };
+
+  const [nearestHospitals, setNearestHospitals] = useState<HospitalData[]>(report.nearest_hospitals || []);
+  const [matchedSchemes, setMatchedSchemes] = useState<Scheme[]>(report.matched_schemes || []);
+  const [heatmapData, setHeatmapData] = useState<HeatmapDataPoint[] | null>(report.disease_heatmap || null);
+  const [loadingHeatmap, setLoadingHeatmap] = useState(!report.disease_heatmap);
+  const [loadingEnrichment, setLoadingEnrichment] = useState(!report.nearest_hospitals || !report.matched_schemes);
+
+  useEffect(() => {
+    // If we have full report data from navigation state, use it
+    if (report.nearest_hospitals && report.matched_schemes && report.disease_heatmap) {
+      setNearestHospitals(report.nearest_hospitals);
+      setMatchedSchemes(report.matched_schemes);
+      setHeatmapData(report.disease_heatmap);
+      setLoadingHeatmap(false);
+      setLoadingEnrichment(false);
+      return;
+    }
+
+    // Otherwise, fetch dynamically from backend
+    if (report.primary_diagnosis) {
+      setLoadingHeatmap(true);
+      setLoadingEnrichment(true);
+
+      apiFetch<any>("/reports/enrich", {
+        method: "POST",
+        body: JSON.stringify({ primary_diagnosis: report.primary_diagnosis }),
+      })
+        .then((data) => {
+          setNearestHospitals(data.nearest_hospitals || []);
+          setMatchedSchemes(data.matched_schemes || []);
+          setHeatmapData(data.disease_heatmap || []);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch enrichment details:", err);
+          setNearestHospitals([]);
+          setMatchedSchemes([]);
+          setHeatmapData([]);
+        })
+        .finally(() => {
+          setLoadingHeatmap(false);
+          setLoadingEnrichment(false);
+        });
+    } else {
+      setNearestHospitals([]);
+      setMatchedSchemes([]);
+      setHeatmapData([]);
+      setLoadingHeatmap(false);
+      setLoadingEnrichment(false);
+    }
+  }, [
+    report.nearest_hospitals,
+    report.matched_schemes,
+    report.disease_heatmap,
+    report.primary_diagnosis,
+  ]);
+
+  const govtHospitals = nearestHospitals.filter((h: HospitalData) => h.is_govt);
+  const privateHospitals = nearestHospitals.filter((h: HospitalData) => !h.is_govt);
 
   const risk = (report.emergency_level?.toLowerCase() || "moderate") as RiskTier;
   const cfg = RISK_CONFIG[risk] || RISK_CONFIG.moderate;
@@ -221,10 +242,14 @@ function TriageResultsPage() {
         y += 6;
       };
 
-      const printBulletList = (items: string[], bulletChar: string, bulletColor: [number, number, number]) => {
+      const printBulletList = (
+        items: string[],
+        bulletChar: string,
+        bulletColor: [number, number, number],
+      ) => {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
-        
+
         items.forEach((item) => {
           const lines = doc.splitTextToSize(item, 170);
           lines.forEach((line: string, index: number) => {
@@ -291,13 +316,13 @@ function TriageResultsPage() {
       doc.setTextColor(148, 163, 184);
       doc.setFont("helvetica", "italic");
       doc.setFontSize(8);
-      
-      const disclaimerText = 
+
+      const disclaimerText =
         "Disclaimer: This output constitutes an automated digital triage summary " +
         "generated from preliminary user input data. It is not an active substitute " +
         "for formal, in-person diagnostic evaluation or clinical treatment from a " +
         "certified healthcare professional.";
-      
+
       const disclaimerLines = doc.splitTextToSize(disclaimerText, 180);
       disclaimerLines.forEach((line: string) => {
         if (y > 285) {
@@ -403,7 +428,7 @@ function TriageResultsPage() {
                 </span>
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Evidence {(idx + 1).toString().padStart(2, '0')}
+                    Evidence {(idx + 1).toString().padStart(2, "0")}
                   </p>
                   <p className="text-[15px] font-semibold text-foreground">{evidence}</p>
                 </div>
@@ -456,104 +481,117 @@ function TriageResultsPage() {
         <section className="mt-7">
           <h3 className="text-lg font-black text-foreground">Precautions &amp; Symptom Tracking</h3>
           <div className="mt-3 rounded-2xl border-2 border-border bg-card p-5">
-              <ul className="space-y-3 text-[15px] leading-relaxed text-foreground">
-                {report.precautions.map((precaution: string, idx: number) => (
-                  <li key={idx} className="flex gap-2.5">
-                    <span className={`font-black ${risk === 'high' || risk === 'critical' ? 'text-destructive' : 'text-primary'}`}>
-                      {idx + 1}.
-                    </span>
-                    {precaution}
-                  </li>
-                ))}
-              </ul>
+            <ul className="space-y-3 text-[15px] leading-relaxed text-foreground">
+              {report.precautions.map((precaution: string, idx: number) => (
+                <li key={idx} className="flex gap-2.5">
+                  <span
+                    className={`font-black ${risk === "high" || risk === "critical" ? "text-destructive" : "text-primary"}`}
+                  >
+                    {idx + 1}.
+                  </span>
+                  {precaution}
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 
         {/* 6. REGULATORY & MEDICAL LEGAL DISCLAIMER */}
         <p className="mt-8 text-[11px] italic leading-relaxed text-muted-foreground">
-          Disclaimer: This output constitutes an automated digital triage summary
-          generated from preliminary user input data. It is not an active substitute
-          for formal, in-person diagnostic evaluation or clinical treatment from a
-          certified healthcare professional.
+          Disclaimer: This output constitutes an automated digital triage summary generated from
+          preliminary user input data. It is not an active substitute for formal, in-person
+          diagnostic evaluation or clinical treatment from a certified healthcare professional.
         </p>
 
         {/* 7. CARE NAVIGATION ACTIONS */}
-        <section className="mt-7">
-          <h3 className="text-lg font-black text-foreground">Find Care Near You</h3>
-          
-          {report.matched_schemes && report.matched_schemes.length > 0 && (
-            <div className="mt-4">
-              <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-1">Matched Government Welfare Schemes</h4>
+        <section className="mt-7 space-y-8">
+          <div>
+            <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
+              <Hospital className="h-5 w-5 text-primary" strokeWidth={2.5} /> Government Hospitals
+            </h3>
+            {govtHospitals.length > 0 ? (
               <div className="space-y-3">
-                {report.matched_schemes.map((s: any, idx: number) => (
-                  <SchemeCard key={idx} scheme={s} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {report.nearest_hospitals && report.nearest_hospitals.length > 0 && (
-            <div className="mt-6">
-              <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-1">Recommended Nearest Hospitals</h4>
-              <div className="space-y-3">
-                {report.nearest_hospitals.map((h: any, idx: number) => (
+                {govtHospitals.map((h: HospitalData, idx: number) => (
                   <HospitalCardDynamic key={idx} hospital={h} />
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Standard Navigation options if not dynamic or alongside them */}
-          {(!report.matched_schemes || report.matched_schemes.length === 0) && (
-            <div className="mt-3 grid grid-cols-1 gap-3">
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/camps" })}
-                className="flex items-center gap-4 rounded-2xl border-2 border-border bg-card p-4 text-left transition active:scale-[0.98] active:bg-muted"
-              >
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-secondary/15 text-secondary">
-                  <Landmark className="h-6 w-6" strokeWidth={2.25} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-base font-extrabold text-foreground">Government Hospitals &amp; Camps</p>
-                  <p className="text-xs font-semibold text-muted-foreground">Check availability and free health camps</p>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowPrivateHospitals((s) => !s)}
-                className="flex items-center gap-4 rounded-2xl border-2 border-border bg-card p-4 text-left transition active:scale-[0.98] active:bg-muted"
-              >
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <Hospital className="h-6 w-6" strokeWidth={2.25} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-base font-extrabold text-foreground">Best Private Hospitals</p>
-                  <p className="text-xs font-semibold text-muted-foreground">Top-rated private care options nearby</p>
-                </div>
-              </button>
-            </div>
-          )}
-
-          {showPrivateHospitals && (!report.nearest_hospitals || report.nearest_hospitals.length === 0) && (
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-bold text-muted-foreground">Sorted by top rated</p>
-                <span className="text-xs font-semibold text-muted-foreground">Bangalore area</span>
+            ) : (
+              <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
+                <p className="text-sm font-semibold text-muted-foreground">
+                  No government hospitals found nearby for this condition.
+                </p>
               </div>
-              {PRIVATE_HOSPITALS.map((h) => (
-                <HospitalCard key={h.name} hospital={h} />
-              ))}
-            </div>
-          )}
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
+              <Hospital className="h-5 w-5 text-primary" strokeWidth={2.5} /> Private Hospitals
+            </h3>
+            {privateHospitals.length > 0 ? (
+              <div className="space-y-3">
+                {privateHospitals.map((h: HospitalData, idx: number) => (
+                  <HospitalCardDynamic key={idx} hospital={h} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
+                <p className="text-sm font-semibold text-muted-foreground">
+                  No private hospitals found nearby for this condition.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
+              <Landmark className="h-5 w-5 text-secondary" strokeWidth={2.5} /> Government Welfare
+              Schemes
+            </h3>
+            {matchedSchemes && matchedSchemes.length > 0 ? (
+              <div className="space-y-3">
+                {matchedSchemes.map((s: Scheme, idx: number) => (
+                  <SchemeCard key={idx} scheme={s} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
+                <p className="text-sm font-semibold text-muted-foreground">
+                  No government welfare schemes matched for this condition.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" strokeWidth={2.5} /> Disease Heatmap
+            </h3>
+            {loadingHeatmap ? (
+              <div className="flex min-h-[150px] items-center justify-center rounded-2xl border-2 border-border bg-card p-5 mt-2">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : heatmapData && heatmapData.length > 0 ? (
+              <DiseaseHeatmapView
+                data={heatmapData}
+                loading={false}
+                initialDisease={report.primary_diagnosis}
+              />
+            ) : (
+              <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
+                <p className="text-sm font-semibold text-muted-foreground">
+                  No outbreak data available for this condition yet
+                </p>
+              </div>
+            )}
+          </div>
         </section>
       </div>
     </div>
   );
 }
 
-function SchemeCard({ scheme }: { scheme: any }) {
+function SchemeCard({ scheme }: { scheme: Scheme }) {
   return (
     <article className="rounded-2xl border-2 border-border bg-card p-5 mt-3 text-left">
       <h4 className="text-base font-black leading-snug text-foreground">{scheme.name}</h4>
@@ -599,21 +637,28 @@ function SchemeCard({ scheme }: { scheme: any }) {
         <p className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
           <MapPin className="h-3.5 w-3.5" /> Coverage Limit
         </p>
-        <p className="mt-1.5 text-sm leading-relaxed text-foreground font-semibold">{scheme.coverageLimit}</p>
+        <p className="mt-1.5 text-sm leading-relaxed text-foreground font-semibold">
+          {scheme.coverageLimit}
+        </p>
       </div>
 
-      <p className="mt-4 text-sm italic leading-relaxed text-muted-foreground">{scheme.description}</p>
+      <p className="mt-4 text-sm italic leading-relaxed text-muted-foreground">
+        {scheme.description}
+      </p>
     </article>
   );
 }
 
-function HospitalCardDynamic({ hospital }: { hospital: any }) {
+function HospitalCardDynamic({ hospital }: { hospital: HospitalData }) {
   const handleDirections = () => {
     toast.success("Opening map directions", { description: hospital.name });
     if (hospital.google_map_direction_link) {
       window.open(hospital.google_map_direction_link, "_blank");
     } else {
-      window.open(`https://maps.google.com/?q=${encodeURIComponent(hospital.name + " " + hospital.address)}`, "_blank");
+      window.open(
+        `https://maps.google.com/?q=${encodeURIComponent(hospital.name + " " + hospital.address)}`,
+        "_blank",
+      );
     }
   };
 
@@ -630,7 +675,9 @@ function HospitalCardDynamic({ hospital }: { hospital: any }) {
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <h3 className="text-base font-extrabold leading-snug text-foreground">{hospital.name}</h3>
+            <h3 className="text-base font-extrabold leading-snug text-foreground">
+              {hospital.name}
+            </h3>
             {hospital.is_govt && (
               <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary uppercase">
                 Govt
@@ -663,8 +710,22 @@ function HospitalCardDynamic({ hospital }: { hospital: any }) {
           <span>{hospital.number}</span>
         </p>
         <div className="flex gap-4 text-xs font-bold text-muted-foreground pt-1.5 border-t border-dashed border-border mt-2">
-          <span>Beds Available: <span className="text-foreground font-black">{hospital.beds_available}</span></span>
-          <span>Emergency: <span className={hospital.emergency_24x7 ? "text-success font-black" : "text-muted-foreground font-black"}>{hospital.emergency_24x7 ? "24x7" : "No"}</span></span>
+          <span>
+            Beds Available:{" "}
+            <span className="text-foreground font-black">{hospital.beds_available}</span>
+          </span>
+          <span>
+            Emergency:{" "}
+            <span
+              className={
+                hospital.emergency_24x7
+                  ? "text-success font-black"
+                  : "text-muted-foreground font-black"
+              }
+            >
+              {hospital.emergency_24x7 ? "24x7" : "No"}
+            </span>
+          </span>
         </div>
       </div>
 
@@ -690,61 +751,16 @@ function HospitalCardDynamic({ hospital }: { hospital: any }) {
   );
 }
 
-function HospitalCard({ hospital }: { hospital: (typeof PRIVATE_HOSPITALS)[number] }) {
-  return (
-    <div className="rounded-2xl border-2 border-border bg-card p-4">
-      <div className="flex items-start gap-3">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-          <Hospital className="h-6 w-6" strokeWidth={2.25} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-base font-extrabold leading-snug text-foreground">{hospital.name}</h3>
-          <p className="text-xs font-semibold text-muted-foreground">{hospital.specialty}</p>
-        </div>
-        <span className="flex shrink-0 items-center gap-1 rounded-lg bg-success/10 px-2 py-1 text-xs font-black text-success">
-          <Star className="h-3.5 w-3.5 fill-current" />
-          {hospital.rating}
-        </span>
-      </div>
-
-      <div className="mt-3 space-y-1.5">
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <MapPin className="h-4 w-4 text-primary" />
-          {hospital.address} · {hospital.distance}
-        </p>
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Phone className="h-4 w-4 text-primary" />
-          {hospital.phone}
-        </p>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => toast.success("Opening directions", { description: hospital.name })}
-          className="flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow active:scale-[0.99]"
-        >
-          <Navigation className="h-4 w-4" />
-          Directions
-        </button>
-        <button
-          type="button"
-          onClick={() => toast.success("Calling hospital", { description: hospital.phone })}
-          className="flex items-center justify-center gap-2 rounded-xl border-2 border-border bg-card py-3 text-sm font-bold text-foreground active:bg-muted"
-        >
-          <Phone className="h-4 w-4" />
-          Call Now
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function AudioToggle() {
   const [playing, setPlaying] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const toggle = () => {
     if (playing) {

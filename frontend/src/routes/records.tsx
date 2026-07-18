@@ -89,10 +89,7 @@ const SAMPLE_RECORDS: TriageRecord[] = [
       "Wear loose cotton clothing",
       "Keep area clean and dry",
     ],
-    dontList: [
-      "Do not scratch the affected area",
-      "Avoid scented soaps and detergents",
-    ],
+    dontList: ["Do not scratch the affected area", "Avoid scented soaps and detergents"],
     recommendation: "Self-care for 5 days; consult dermatologist if it spreads.",
   },
   {
@@ -137,17 +134,17 @@ const SAMPLE_RECORDS: TriageRecord[] = [
       "Use saline nasal rinse morning and night",
       "Keep windows closed during high pollen hours",
     ],
-    dontList: [
-      "Avoid dusty / outdoor exercise mid-day",
-      "Do not combine multiple antihistamines",
-    ],
+    dontList: ["Avoid dusty / outdoor exercise mid-day", "Do not combine multiple antihistamines"],
     recommendation: "Continue OTC care; review with ENT if persists > 4 weeks.",
   },
 ];
 
 const STORAGE_KEY = "healthbox.records.v1";
 
-const RISK_META: Record<RiskTier, { label: string; chip: string; ring: string; Icon: typeof ShieldCheck }> = {
+const RISK_META: Record<
+  RiskTier,
+  { label: string; chip: string; ring: string; Icon: typeof ShieldCheck }
+> = {
   low: {
     label: "Low Risk",
     chip: "bg-success/15 text-success",
@@ -203,8 +200,20 @@ function mapBackendRecordToTriageRecord(r: any): TriageRecord {
       const lower = item.toLowerCase();
       let icon: "log" | "temp" | "vitals" | "scan" = "log";
       if (lower.includes("temp") || lower.includes("temperature")) icon = "temp";
-      else if (lower.includes("bpm") || lower.includes("spo2") || lower.includes("blood pressure") || lower.includes("heart rate")) icon = "vitals";
-      else if (lower.includes("dermal") || lower.includes("irritation") || lower.includes("scan") || lower.includes("boundary")) icon = "scan";
+      else if (
+        lower.includes("bpm") ||
+        lower.includes("spo2") ||
+        lower.includes("blood pressure") ||
+        lower.includes("heart rate")
+      )
+        icon = "vitals";
+      else if (
+        lower.includes("dermal") ||
+        lower.includes("irritation") ||
+        lower.includes("scan") ||
+        lower.includes("boundary")
+      )
+        icon = "scan";
       return {
         label: "Clinical Evidence",
         value: item,
@@ -299,7 +308,11 @@ function RecordsPage() {
         doc.setTextColor(15, 118, 110);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
-        doc.text(`Clinical Correlation Confidence: ${record.rawReport.confidence_percentage}`, 15, y);
+        doc.text(
+          `Clinical Correlation Confidence: ${record.rawReport.confidence_percentage}`,
+          15,
+          y,
+        );
         y += 5;
       }
 
@@ -326,10 +339,14 @@ function RecordsPage() {
         y += 6;
       };
 
-      const printBulletList = (items: string[], bulletChar: string, bulletColor: [number, number, number]) => {
+      const printBulletList = (
+        items: string[],
+        bulletChar: string,
+        bulletColor: [number, number, number],
+      ) => {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
-        
+
         items.forEach((item) => {
           const lines = doc.splitTextToSize(item, 170);
           lines.forEach((line: string, index: number) => {
@@ -355,7 +372,7 @@ function RecordsPage() {
       };
 
       // 1. Clinical Evidence
-      const evidenceTexts = record.evidence.map(e => e.value);
+      const evidenceTexts = record.evidence.map((e) => e.value);
       if (evidenceTexts.length > 0) {
         printSectionHeader("CLINICAL EVIDENCE BASE");
         printBulletList(evidenceTexts, "-", [100, 116, 139]);
@@ -438,14 +455,14 @@ function RecordsPage() {
       doc.setTextColor(148, 163, 184);
       doc.setFont("helvetica", "italic");
       doc.setFontSize(8);
-      
-      const disclaimerText = 
+
+      const disclaimerText =
         "Disclaimer: This output constitutes an automated digital triage summary " +
         "generated from preliminary user input data. It is not an active substitute " +
         "for formal, in-person diagnostic evaluation or clinical treatment from a " +
         "certified healthcare professional. This AI-generated analysis is not a " +
         "substitute for professional medical advice.";
-      
+
       const disclaimerLines = doc.splitTextToSize(disclaimerText, 180);
       disclaimerLines.forEach((line: string) => {
         if (y > 285) {
@@ -496,7 +513,11 @@ function RecordsPage() {
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
-        doc.text(`Report Date: ${formatDate(record.date)} | ID: ${record.rawReport?.report_id || record.id}`, 15, 16);
+        doc.text(
+          `Report Date: ${formatDate(record.date)} | ID: ${record.rawReport?.report_id || record.id}`,
+          15,
+          16,
+        );
 
         y = 32;
 
@@ -512,7 +533,11 @@ function RecordsPage() {
 
         doc.setFontSize(9);
         doc.setTextColor(100, 116, 139);
-        doc.text(`Emergency Level: ${meta.label} | Chief Complaint: ${record.chiefComplaint}`, 15, y);
+        doc.text(
+          `Emergency Level: ${meta.label} | Chief Complaint: ${record.chiefComplaint}`,
+          15,
+          y,
+        );
         y += 10;
 
         // Separator
@@ -532,7 +557,7 @@ function RecordsPage() {
           doc.setFont("helvetica", "normal");
           doc.setFontSize(9);
           doc.setTextColor(51, 65, 85);
-          items.forEach(item => {
+          items.forEach((item) => {
             const lines = doc.splitTextToSize(`${bullet} ${item}`, 175);
             lines.forEach((line: string) => {
               doc.text(line, 15, y);
@@ -543,7 +568,7 @@ function RecordsPage() {
         };
 
         // Evidence
-        const evidenceTexts = record.evidence.map(e => e.value);
+        const evidenceTexts = record.evidence.map((e) => e.value);
         if (evidenceTexts.length > 0) {
           printSubHeader("Clinical Evidence");
           printBodyTextList(evidenceTexts, "-");
@@ -589,7 +614,11 @@ function RecordsPage() {
         doc.setTextColor(148, 163, 184);
         doc.setFont("helvetica", "italic");
         doc.setFontSize(7);
-        doc.text("Disclaimer: Automated triage summary. Not a substitute for professional medical advice.", 15, 282);
+        doc.text(
+          "Disclaimer: Automated triage summary. Not a substitute for professional medical advice.",
+          15,
+          282,
+        );
       });
 
       const today = new Date().toISOString().split("T")[0];
@@ -698,7 +727,8 @@ function RecordsPage() {
                 <FolderHeart className="h-16 w-16 text-primary/40 mb-4 animate-pulse" />
                 <h3 className="text-lg font-bold text-foreground">No Records Found</h3>
                 <p className="text-sm text-muted-foreground mt-2 max-w-[280px] leading-relaxed">
-                  You haven't run any AI Diagnostics checks yet. Your dynamic triage reports will appear here.
+                  You haven't run any AI Diagnostics checks yet. Your dynamic triage reports will
+                  appear here.
                 </p>
                 <button
                   type="button"
@@ -713,13 +743,18 @@ function RecordsPage() {
                 {records.map((r) => {
                   const meta = RISK_META[r.risk] || RISK_META.moderate;
                   return (
-                    <li key={r.id} className="relative flex items-center gap-2 rounded-2xl border-2 border-border bg-card p-4 transition hover:bg-muted/30 ring-1 hover:scale-[0.99]">
+                    <li
+                      key={r.id}
+                      className="relative flex items-center gap-2 rounded-2xl border-2 border-border bg-card p-4 transition hover:bg-muted/30 ring-1 hover:scale-[0.99]"
+                    >
                       <button
                         type="button"
                         onClick={() => setOpenId(r.id)}
                         className="flex-1 flex items-start gap-3 text-left focus:outline-none"
                       >
-                        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${meta.chip}`}>
+                        <span
+                          className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${meta.chip}`}
+                        >
                           <meta.Icon className="h-5 w-5" />
                         </span>
                         <span className="min-w-0 flex-1">
@@ -734,7 +769,9 @@ function RecordsPage() {
                           <span className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                             <Calendar className="h-3.5 w-3.5" />
                             {formatDate(r.date)}
-                            <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${meta.chip}`}>
+                            <span
+                              className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${meta.chip}`}
+                            >
                               {meta.label}
                             </span>
                           </span>
@@ -761,9 +798,13 @@ function RecordsPage() {
 
         {active && (
           <article className="flex flex-col gap-4">
-            <div className={`rounded-2xl border-2 border-border bg-card p-4 ring-1 ${RISK_META[active.risk].ring}`}>
+            <div
+              className={`rounded-2xl border-2 border-border bg-card p-4 ring-1 ${RISK_META[active.risk].ring}`}
+            >
               <div className="flex items-center gap-3">
-                <span className={`grid h-12 w-12 place-items-center rounded-xl ${RISK_META[active.risk].chip}`}>
+                <span
+                  className={`grid h-12 w-12 place-items-center rounded-xl ${RISK_META[active.risk].chip}`}
+                >
                   {(() => {
                     const I = RISK_META[active.risk].Icon;
                     return <I className="h-6 w-6" />;
@@ -778,9 +819,7 @@ function RecordsPage() {
                   </h2>
                 </div>
               </div>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                {active.summary}
-              </p>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{active.summary}</p>
               <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                 <Calendar className="h-3.5 w-3.5" />
                 {formatDate(active.date)}
@@ -803,9 +842,7 @@ function RecordsPage() {
                         <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                           {e.label}
                         </span>
-                        <span className="block text-sm font-medium text-foreground">
-                          {e.value}
-                        </span>
+                        <span className="block text-sm font-medium text-foreground">{e.value}</span>
                       </span>
                     </li>
                   );
@@ -847,7 +884,9 @@ function RecordsPage() {
               <h3 className="mb-1 text-sm font-bold uppercase tracking-wider text-primary text-left">
                 Next Step
               </h3>
-              <p className="text-sm font-medium text-foreground text-left">{active.recommendation}</p>
+              <p className="text-sm font-medium text-foreground text-left">
+                {active.recommendation}
+              </p>
             </section>
 
             {active.rawReport?.matched_schemes && active.rawReport.matched_schemes.length > 0 && (
@@ -857,9 +896,14 @@ function RecordsPage() {
                 </h3>
                 <div className="flex flex-col gap-3 text-left">
                   {active.rawReport.matched_schemes.map((s: any, i: number) => (
-                    <div key={i} className="border-b border-dashed border-border pb-2 last:border-b-0 last:pb-0">
+                    <div
+                      key={i}
+                      className="border-b border-dashed border-border pb-2 last:border-b-0 last:pb-0"
+                    >
                       <p className="text-sm font-bold text-foreground leading-snug">{s.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Eligibility: {s.targetDemographic}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Eligibility: {s.targetDemographic}
+                      </p>
                       <p className="text-xs text-muted-foreground">Coverage: {s.coverageLimit}</p>
                     </div>
                   ))}
@@ -867,22 +911,28 @@ function RecordsPage() {
               </section>
             )}
 
-            {active.rawReport?.nearest_hospitals && active.rawReport.nearest_hospitals.length > 0 && (
-              <section className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4">
-                <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
-                  <FolderHeart className="h-4 w-4" /> Recommended Hospitals
-                </h3>
-                <div className="flex flex-col gap-3 text-left">
-                  {active.rawReport.nearest_hospitals.map((h: any, i: number) => (
-                    <div key={i} className="border-b border-dashed border-border pb-2 last:border-b-0 last:pb-0">
-                      <p className="text-sm font-bold text-foreground leading-snug">{h.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Cures: {h.all_disease_it_cures?.join(", ")}</p>
-                      <p className="text-xs text-muted-foreground">Address: {h.address}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+            {active.rawReport?.nearest_hospitals &&
+              active.rawReport.nearest_hospitals.length > 0 && (
+                <section className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4">
+                  <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+                    <FolderHeart className="h-4 w-4" /> Recommended Hospitals
+                  </h3>
+                  <div className="flex flex-col gap-3 text-left">
+                    {active.rawReport.nearest_hospitals.map((h: any, i: number) => (
+                      <div
+                        key={i}
+                        className="border-b border-dashed border-border pb-2 last:border-b-0 last:pb-0"
+                      >
+                        <p className="text-sm font-bold text-foreground leading-snug">{h.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Cures: {h.all_disease_it_cures?.join(", ")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Address: {h.address}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
             <button
               type="button"
