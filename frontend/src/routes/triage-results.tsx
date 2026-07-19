@@ -74,11 +74,17 @@ function TriageResultsPage() {
     ],
   };
 
-  const [nearestHospitals, setNearestHospitals] = useState<HospitalData[]>(report.nearest_hospitals || []);
+  const [nearestHospitals, setNearestHospitals] = useState<HospitalData[]>(
+    report.nearest_hospitals || [],
+  );
   const [matchedSchemes, setMatchedSchemes] = useState<Scheme[]>(report.matched_schemes || []);
-  const [heatmapData, setHeatmapData] = useState<HeatmapDataPoint[] | null>(report.disease_heatmap || null);
+  const [heatmapData, setHeatmapData] = useState<HeatmapDataPoint[] | null>(
+    report.disease_heatmap || null,
+  );
   const [loadingHeatmap, setLoadingHeatmap] = useState(!report.disease_heatmap);
-  const [loadingEnrichment, setLoadingEnrichment] = useState(!report.nearest_hospitals || !report.matched_schemes);
+  const [loadingEnrichment, setLoadingEnrichment] = useState(
+    !report.nearest_hospitals || !report.matched_schemes,
+  );
 
   useEffect(() => {
     // If we have full report data from navigation state, use it
@@ -576,6 +582,7 @@ function TriageResultsPage() {
                 data={heatmapData}
                 loading={false}
                 initialDisease={report.primary_diagnosis}
+                hideCampRecommendations={true}
               />
             ) : (
               <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">

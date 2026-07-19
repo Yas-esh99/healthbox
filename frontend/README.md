@@ -1,14 +1,16 @@
 I explored the entire `frontend/` app (routes, shared libs, build/runtime config) and there are currently **no real API calls**—all “backend” behavior is mocked in UI state, timers, and localStorage.
 
 **Tech Stack**
+
 - Runtime/build: Vite + TypeScript ([package.json](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/package.json), [vite.config.ts](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/vite.config.ts))
 - App framework: TanStack Start (SSR) + TanStack Router (file-based routes) + TanStack Query ([package.json](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/package.json), [start.ts](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/start.ts), [router.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/router.tsx))
 - UI/styling: Tailwind CSS v4 + shadcn/ui + Radix primitives + lucide icons ([styles.css](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/styles.css), [components.json](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/components.json))
 - Forms/validation: react-hook-form + zod (deps present; not heavily used in current pages) ([package.json](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/package.json))
-- Toasts: sonner ([__root.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/routes/__root.tsx#L14-L16))
+- Toasts: sonner ([\_\_root.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/routes/__root.tsx#L14-L16))
 - Package manager hints: Bun lockfile + bunfig supply-chain guard ([bunfig.toml](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/bunfig.toml))
 
 **Folder Structure**
+
 - `frontend/src/routes/`: File-based pages (TanStack Router) ([routeTree.gen.ts](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/routeTree.gen.ts))
 - `frontend/src/components/`: App components like bottom nav + SOS button ([bottom-nav.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/components/bottom-nav.tsx), [sos-button.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/components/sos-button.tsx))
 - `frontend/src/components/ui/`: shadcn/Radix-based UI primitives (many files under `ui/`)
@@ -103,10 +105,12 @@ I explored the entire `frontend/` app (routes, shared libs, build/runtime config
   - **Navigation**: Part of the core bottom navigation menu ([chat.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/routes/chat.tsx))
 
 **Navigation Components**
+
 - **Bottom Tab Bar**: Fixed navigation between `/home`, `/schemes`, `/camps`, and `/chat` ([bottom-nav.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/components/bottom-nav.tsx)).
 - **SOS Button**: Global floating button triggering emergency service actions (mock toast) ([sos-button.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/components/sos-button.tsx)).
 
 **API Expectations / Mocks (What Backend Would Need To Provide)**
+
 - Auth (currently mocked):
   - `POST /auth/otp/send` (phone) used by `/login` flow
   - `POST /auth/otp/verify` (phone + code) used by `/verify-otp`
@@ -128,6 +132,7 @@ I explored the entire `frontend/` app (routes, shared libs, build/runtime config
   - `POST /chat` (message, language, context like last triage) → returns assistant reply (and optional TTS link)
 
 **Existing Backend References / Config You’d Need To Align With**
+
 - This is a TanStack Start SSR app; the server entry is wrapped in [server.ts](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/server.ts) and Start instance is in [start.ts](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/start.ts).
 - Vite/TanStack config is delegated to `@lovable.dev/vite-tanstack-config` and mentions Nitro (build) and Cloudflare as default target in comments ([vite.config.ts](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/vite.config.ts)).
 - No `.env` files are present; no `VITE_*` variables are currently referenced in code (search only found the SSR `fetch` handler in [server.ts](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/server.ts)).
@@ -139,8 +144,6 @@ If you want, I can translate the above into a concrete backend contract (OpenAPI
 
 I need to provide a summary analysis and ask the user what to do next. No specific skills are required for this part. I should highlight key details and offer backend suggestions. I noticed that there's no backend folder, which could be in the root directory instead. It might be good to quickly inspect the root structure, so I think I'll run the LS command at the app root to see what exists there.
 
-
-
 **Considering backend development steps**
 
 The user responded quickly, so I can move forward, but they mentioned they'd provide further instructions. Since they already shared preferences, I’ll summarize my analysis and propose a backend plan using FastAPI and Firestore. I also need to outline proposed endpoints that match the UI and confirm recorded preferences. I’d like to check if there’s an existing backend folder—if not, I’ll suggest creating one. Finally, I’ll ask, “Should I start scaffolding the backend now?”
@@ -149,13 +152,14 @@ The user responded quickly, so I can move forward, but they mentioned they'd pro
 
 I’m realizing I shouldn't ask for confirmation using the AskUserQuestion method, specifically not to say, “Is my plan ready?” In agent mode, I can use plain text instead. It's more effective to simply ask if the user wants to start implementing the plan. So, I’ll proceed with crafting a final message to communicate that clearly. Keeping it straightforward will show respect for their preferences and get us moving forward!
 
-
 **What’s in your current project**
+
 - The repo at [app/](file:///c:/Users/User/OneDrive/Desktop/Biothon/app) contains only a TanStack Start (SSR) + Vite + TypeScript frontend in [frontend/](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend).
 - All “backend-like” behaviors are currently mocked with `setTimeout`, static arrays, and `localStorage` (no real network calls yet).
 - Notable client persistence: `/records` uses `localStorage` key `healthbox.records.v1` ([records.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/routes/records.tsx#L41-L195)).
 
 **Main user flows (routes) that will need backend support**
+
 - Auth flow is UI-only right now:
   - `/login` → simulates sending OTP ([login.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/routes/login.tsx))
   - `/verify-otp` → simulates verification ([verify-otp.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/routes/verify-otp.tsx))
@@ -172,6 +176,7 @@ I’m realizing I shouldn't ask for confirmation using the AskUserQuestion metho
   - `/chat` uses a static response map ([chat.tsx](file:///c:/Users/User/OneDrive/Desktop/Biothon/app/frontend/src/routes/chat.tsx))
 
 **Backend surface area suggested by the UI**
+
 - `POST /triage` + `GET /triage/{id}` (power `/symptoms` → `/triage-results` and later `/records`)
 - `POST /uploads` (multipart for scan/photo/PDF)
 - `POST /schemes/scan` (image/PDF → extracted fields + eligible schemes)
@@ -179,6 +184,7 @@ I’m realizing I shouldn't ask for confirmation using the AskUserQuestion metho
 - `POST /chat` (LLM-backed later; can start stubbed)
 
 **Your backend preferences (captured)**
+
 - Framework: FastAPI (Python)
 - Database: Firestore
 - Upload storage: local disk
