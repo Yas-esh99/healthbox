@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import {
   MapPin,
   Map as MapIcon,
@@ -18,13 +18,12 @@ import {
   BadgeCheck,
   Tent,
   Landmark,
-  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BottomNav } from "@/components/bottom-nav";
 import { SosButton } from "@/components/sos-button";
-import { apiFetch } from "@/lib/api";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
+import { apiFetch, HeatmapDataPoint } from "@/lib/api";
+import { DiseaseHeatmapView } from "@/components/disease-heatmap";
 
 export const Route = createFileRoute("/camps")({
   head: () => ({ meta: [{ title: "Government Hospitals & Camps" }] }),
@@ -34,10 +33,38 @@ export const Route = createFileRoute("/camps")({
 type Tab = "camps" | "schemes" | "analytics";
 type View = "map" | "list";
 
+const RealCampsMap = lazy(() => {
+  if (typeof window === "undefined") {
+    return Promise.resolve({ default: () => null });
+  }
+  return import("../components/real-camps-map").then((m) => ({ default: m.RealCampsMap }));
+});
+
 const CAMPS = [
-  { name: "Free Eye & Vision Camp", org: "Lions Club", date: "Sat, 14 Jun · 9 AM", distance: "1.2 km away" },
-  { name: "Diabetes & BP Screening", org: "City Health Dept.", date: "Sun, 15 Jun · 10 AM", distance: "3.6 km away" },
-  { name: "Child Vaccination Drive", org: "Govt. Primary Center", date: "Wed, 18 Jun · 8 AM", distance: "4.1 km away" },
+  {
+    name: "Free Eye & Vision Camp",
+    org: "Lions Club",
+    date: "Sat, 14 Jun · 9 AM",
+    distance: "1.2 km away",
+    lat: 23.03,
+    lng: 72.58,
+  },
+  {
+    name: "Diabetes & BP Screening",
+    org: "City Health Dept.",
+    date: "Sun, 15 Jun · 10 AM",
+    distance: "3.6 km away",
+    lat: 23.015,
+    lng: 72.56,
+  },
+  {
+    name: "Child Vaccination Drive",
+    org: "Govt. Primary Center",
+    date: "Wed, 18 Jun · 8 AM",
+    distance: "4.1 km away",
+    lat: 23.04,
+    lng: 72.59,
+  },
 ];
 
 const SCHEMES = [
@@ -48,7 +75,8 @@ const SCHEMES = [
     diseases:
       "Major infectious diseases, acute secondary/tertiary surgeries, severe respiratory complications, cardiac & oncology care up to ₹5 lakh/family/year.",
     coverage: "All empaneled public and private tertiary hospitals nationwide.",
-    brief: "Cashless secondary and tertiary hospitalization for eligible families across the PM-JAY network.",
+    brief:
+      "Cashless secondary and tertiary hospitalization for eligible families across the PM-JAY network.",
     link: "https://pmjay.gov.in",
     linkLabel: "View Scheme Guidelines & Portal",
   },
@@ -59,7 +87,8 @@ const SCHEMES = [
     diseases:
       "OPD consultations, chronic disease management (diabetes, hypertension), inpatient surgical care, diagnostics & medicines.",
     coverage: "CGHS Wellness Centres and empaneled private hospitals in covered cities.",
-    brief: "Comprehensive healthcare for Central Government beneficiaries via CGHS Wellness Centres.",
+    brief:
+      "Comprehensive healthcare for Central Government beneficiaries via CGHS Wellness Centres.",
     link: "https://cghs.gov.in",
     linkLabel: "Open CGHS Beneficiary Portal",
   },
@@ -73,6 +102,8 @@ const HOSPITALS = [
     status: "24/7 Emergency Wing Active | Beds Available",
     address: "Plot 14, Ring Road, Sector 9, Ahmedabad — 380015",
     desk: "Registration Desk: Block A, Ground Floor · +91 79 4000 1200",
+    lat: 23.0225,
+    lng: 72.5714,
   },
   {
     name: "District Government General Hospital",
@@ -81,6 +112,8 @@ const HOSPITALS = [
     status: "24/7 Casualty Active | Limited ICU Beds",
     address: "Civil Lines, Main Road, District Health Complex — 380001",
     desk: "Registration Desk: OPD Counter 3 · +91 79 2550 8800",
+    lat: 23.05,
+    lng: 72.55,
   },
 ];
 
@@ -88,13 +121,6 @@ function CampsPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("camps");
   const [view, setView] = useState<View>("list");
-
-  interface HeatmapDataPoint {
-    state: string;
-    district: string;
-    disease: string;
-    cases_count: number;
-  }
 
   const [heatmapData, setHeatmapData] = useState<HeatmapDataPoint[]>([]);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
@@ -109,13 +135,38 @@ function CampsPage() {
         .catch((err) => {
           console.error("Failed to fetch disease heatmap data:", err);
           setHeatmapData([
-            { state: "Gujarat", district: "Ahmedabad", disease: "Diabetes & Hypertension", cases_count: 24 },
-            { state: "Gujarat", district: "Ahmedabad", disease: "Viral Pharyngitis", cases_count: 18 },
-            { state: "Gujarat", district: "Gandhinagar", disease: "Asthma & COPD", cases_count: 15 },
-            { state: "Gujarat", district: "Gandhinagar", disease: "Contact Dermatitis", cases_count: 9 },
+            {
+              state: "Gujarat",
+              district: "Ahmedabad",
+              disease: "Diabetes & Hypertension",
+              cases_count: 24,
+            },
+            {
+              state: "Gujarat",
+              district: "Ahmedabad",
+              disease: "Viral Pharyngitis",
+              cases_count: 18,
+            },
+            {
+              state: "Gujarat",
+              district: "Gandhinagar",
+              disease: "Asthma & COPD",
+              cases_count: 15,
+            },
+            {
+              state: "Gujarat",
+              district: "Gandhinagar",
+              disease: "Contact Dermatitis",
+              cases_count: 9,
+            },
             { state: "Gujarat", district: "Surat", disease: "Viral Pharyngitis", cases_count: 32 },
             { state: "Gujarat", district: "Surat", disease: "Gastroenteritis", cases_count: 22 },
-            { state: "Gujarat", district: "Rajkot", disease: "Diabetes & Hypertension", cases_count: 14 },
+            {
+              state: "Gujarat",
+              district: "Rajkot",
+              disease: "Diabetes & Hypertension",
+              cases_count: 14,
+            },
             { state: "Gujarat", district: "Rajkot", disease: "Asthma & COPD", cases_count: 11 },
           ]);
         })
@@ -157,16 +208,41 @@ function CampsPage() {
 
         {/* Tab switcher */}
         <div className="mt-5 grid grid-cols-3 gap-1.5 rounded-2xl border-2 border-border bg-card p-1">
-          <TabButton active={tab === "camps"} onClick={() => setTab("camps")} icon={Tent} label="Camps" />
-          <TabButton active={tab === "schemes"} onClick={() => setTab("schemes")} icon={Landmark} label="Schemes" />
-          <TabButton active={tab === "analytics"} onClick={() => setTab("analytics")} icon={Activity} label="Heatmap" />
+          <TabButton
+            active={tab === "camps"}
+            onClick={() => setTab("camps")}
+            icon={Tent}
+            label="Camps"
+          />
+          <TabButton
+            active={tab === "schemes"}
+            onClick={() => setTab("schemes")}
+            icon={Landmark}
+            label="Schemes"
+          />
+          <TabButton
+            active={tab === "analytics"}
+            onClick={() => setTab("analytics")}
+            icon={Activity}
+            label="HealthMap"
+          />
         </div>
 
         {tab === "camps" && (
           <>
             <div className="mt-5 grid grid-cols-2 gap-2 rounded-2xl border-2 border-border bg-card p-1.5">
-              <ToggleButton active={view === "map"} onClick={() => setView("map")} icon={MapIcon} label="Map View" />
-              <ToggleButton active={view === "list"} onClick={() => setView("list")} icon={List} label="List View" />
+              <ToggleButton
+                active={view === "map"}
+                onClick={() => setView("map")}
+                icon={MapIcon}
+                label="Map View"
+              />
+              <ToggleButton
+                active={view === "list"}
+                onClick={() => setView("list")}
+                icon={List}
+                label="List View"
+              />
             </div>
             {view === "map" ? (
               <MapView />
@@ -180,9 +256,7 @@ function CampsPage() {
           </>
         )}
 
-        {tab === "schemes" && (
-          <SchemesAndHospitals />
-        )}
+        {tab === "schemes" && <SchemesAndHospitals />}
 
         {tab === "analytics" && (
           <DiseaseHeatmapView data={heatmapData} loading={loadingAnalytics} />
@@ -212,7 +286,9 @@ function TabButton({
       onClick={onClick}
       className={
         "flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition " +
-        (active ? "bg-secondary text-secondary-foreground shadow" : "text-muted-foreground active:bg-muted")
+        (active
+          ? "bg-secondary text-secondary-foreground shadow"
+          : "text-muted-foreground active:bg-muted")
       }
     >
       <Icon className="h-5 w-5" strokeWidth={2.5} />
@@ -238,7 +314,9 @@ function ToggleButton({
       onClick={onClick}
       className={
         "flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition " +
-        (active ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground active:bg-muted")
+        (active
+          ? "bg-primary text-primary-foreground shadow"
+          : "text-muted-foreground active:bg-muted")
       }
     >
       <Icon className="h-5 w-5" strokeWidth={2.5} />
@@ -248,29 +326,29 @@ function ToggleButton({
 }
 
 function MapView() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <div className="relative mt-6 h-[420px] w-full overflow-hidden rounded-3xl border-2 border-border bg-muted">
-      <div
-        className="absolute inset-0 opacity-40"
-        style={{
-          backgroundImage:
-            "linear-gradient(to right, var(--color-border) 1px, transparent 1px), linear-gradient(to bottom, var(--color-border) 1px, transparent 1px)",
-          backgroundSize: "30px 30px",
-        }}
-      />
-      {[
-        { top: "30%", left: "35%" },
-        { top: "55%", left: "60%" },
-        { top: "70%", left: "28%" },
-      ].map((p, i) => (
-        <span key={i} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ top: p.top, left: p.left }}>
-          <span className="absolute -inset-3 animate-ping rounded-full bg-secondary/20" />
-          <span className="relative grid h-10 w-10 place-items-center rounded-full bg-secondary text-secondary-foreground shadow-lg">
-            <Stethoscope className="h-5 w-5" strokeWidth={2.5} />
-          </span>
-        </span>
-      ))}
-      <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-card/90 px-3 py-1.5 text-xs font-bold text-foreground shadow backdrop-blur">
+      {mounted ? (
+        <Suspense
+          fallback={
+            <div className="h-full w-full flex items-center justify-center text-xs font-semibold text-muted-foreground">
+              Loading map components...
+            </div>
+          }
+        >
+          <RealCampsMap camps={CAMPS} hospitals={HOSPITALS} />
+        </Suspense>
+      ) : (
+        <div className="h-full w-full flex items-center justify-center text-xs font-semibold text-muted-foreground">
+          Loading map...
+        </div>
+      )}
+      <div className="absolute bottom-3 left-3 z-[1000] flex items-center gap-1.5 rounded-full bg-card/90 px-3 py-1.5 text-xs font-bold text-foreground shadow backdrop-blur border border-border">
         <Navigation className="h-3.5 w-3.5 text-secondary" />
         {CAMPS.length} camps near you
       </div>
@@ -319,7 +397,9 @@ function SchemesAndHospitals() {
       <section>
         <div className="flex items-center gap-2">
           <Landmark className="h-5 w-5 text-secondary" strokeWidth={2.5} />
-          <h2 className="text-lg font-black text-foreground">Section A · Government Healthcare Schemes</h2>
+          <h2 className="text-lg font-black text-foreground">
+            Section A · Government Healthcare Schemes
+          </h2>
         </div>
         <div className="mt-3 space-y-4">
           {SCHEMES.map((s) => (
@@ -332,7 +412,9 @@ function SchemesAndHospitals() {
       <section>
         <div className="flex items-center gap-2">
           <Building2 className="h-5 w-5 text-primary" strokeWidth={2.5} />
-          <h2 className="text-lg font-black text-foreground">Section B · Recommended Hospitals Directory</h2>
+          <h2 className="text-lg font-black text-foreground">
+            Section B · Recommended Hospitals Directory
+          </h2>
         </div>
         <div className="mt-3 space-y-4">
           {HOSPITALS.map((h) => (
@@ -406,12 +488,16 @@ function HospitalCard({ hospital }: { hospital: (typeof HOSPITALS)[number] }) {
         </span>
         <div className="min-w-0">
           <h3 className="text-base font-black leading-snug text-foreground">{hospital.name}</h3>
-          <p className="mt-0.5 text-[11px] font-extrabold uppercase tracking-wider text-secondary">{hospital.tier}</p>
+          <p className="mt-0.5 text-[11px] font-extrabold uppercase tracking-wider text-secondary">
+            {hospital.tier}
+          </p>
         </div>
       </div>
 
       <div className="mt-4">
-        <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Specialization</p>
+        <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+          Specialization
+        </p>
         <p className="mt-1 text-sm font-semibold text-foreground">{hospital.specialty}</p>
       </div>
 
@@ -433,287 +519,3 @@ function HospitalCard({ hospital }: { hospital: (typeof HOSPITALS)[number] }) {
     </article>
   );
 }
-
-interface HeatmapDataPoint {
-  state: string;
-  district: string;
-  disease: string;
-  cases_count: number;
-}
-
-function DiseaseHeatmapView({ data, loading }: { data: HeatmapDataPoint[]; loading: boolean }) {
-  const [selectedDistrict, setSelectedDistrict] = useState<string>("All");
-  const [selectedDisease, setSelectedDisease] = useState<string>("All");
-  const navigate = useNavigate();
-
-  // Get unique districts and diseases for filters
-  const districts = useMemo(() => {
-    const d = new Set<string>();
-    data.forEach((x) => d.add(x.district));
-    return ["All", ...Array.from(d)];
-  }, [data]);
-
-  const diseases = useMemo(() => {
-    const d = new Set<string>();
-    data.forEach((x) => d.add(x.disease));
-    return ["All", ...Array.from(d)];
-  }, [data]);
-
-  // Filtered data
-  const filteredData = useMemo(() => {
-    return data.filter((x) => {
-      const matchDistrict = selectedDistrict === "All" || x.district === selectedDistrict;
-      const matchDisease = selectedDisease === "All" || x.disease === selectedDisease;
-      return matchDistrict && matchDisease;
-    });
-  }, [data, selectedDistrict, selectedDisease]);
-
-  // Aggregated data by district for bar chart
-  const districtChartData = useMemo(() => {
-    const map: Record<string, number> = {};
-    filteredData.forEach((x) => {
-      map[x.district] = (map[x.district] || 0) + x.cases_count;
-    });
-    return Object.entries(map)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [filteredData]);
-
-  // Aggregated data by disease for ranking list
-  const diseaseBreakdown = useMemo(() => {
-    const map: Record<string, number> = {};
-    filteredData.forEach((x) => {
-      map[x.disease] = (map[x.disease] || 0) + x.cases_count;
-    });
-    return Object.entries(map)
-      .map(([disease, cases]) => ({ disease, cases }))
-      .sort((a, b) => b.cases - a.cases);
-  }, [filteredData]);
-
-  // Automated health camp placement recommendation suggestions
-  const placementRecommendations = useMemo(() => {
-    const districtDiseaseCases: Record<string, Record<string, number>> = {};
-    filteredData.forEach((x) => {
-      if (!districtDiseaseCases[x.district]) districtDiseaseCases[x.district] = {};
-      districtDiseaseCases[x.district][x.disease] = (districtDiseaseCases[x.district][x.disease] || 0) + x.cases_count;
-    });
-
-    const recommendations = [];
-    for (const [dist, diseasesMap] of Object.entries(districtDiseaseCases)) {
-      const sortedDiseases = Object.entries(diseasesMap).sort((a, b) => b[1] - a[1]);
-      if (sortedDiseases.length > 0) {
-        const [topDisease, count] = sortedDiseases[0];
-        if (count >= 5) {
-          let campType = "General Health Checkup";
-          let actionLabel = "Schedule Screening Camp";
-          
-          const lowerDisease = topDisease.toLowerCase();
-          if (lowerDisease.includes("diabetes") || lowerDisease.includes("hypertension") || lowerDisease.includes("bp")) {
-            campType = "NCD (Diabetes & BP) Screening Camp";
-            actionLabel = "Schedule NCD Camp";
-          } else if (lowerDisease.includes("viral") || lowerDisease.includes("pharyngitis") || lowerDisease.includes("fever")) {
-            campType = "Infectious & Viral Disease Camp";
-            actionLabel = "Schedule Outbreak Camp";
-          } else if (lowerDisease.includes("asthma") || lowerDisease.includes("copd") || lowerDisease.includes("respiratory")) {
-            campType = "Pulmonology & Asthma Treatment Camp";
-            actionLabel = "Schedule Respiratory Camp";
-          } else if (lowerDisease.includes("dermatitis") || lowerDisease.includes("rash") || lowerDisease.includes("skin")) {
-            campType = "Dermatology Specialist Camp";
-            actionLabel = "Schedule Skin Care Camp";
-          } else if (lowerDisease.includes("gastroenteritis") || lowerDisease.includes("water") || lowerDisease.includes("diarrhea")) {
-            campType = "Pediatric & Gastroenteritis Awareness Camp";
-            actionLabel = "Schedule Sanitation Camp";
-          }
-
-          recommendations.push({
-            district: dist,
-            disease: topDisease,
-            cases: count,
-            campType,
-            actionLabel
-          });
-        }
-      }
-    }
-    return recommendations.sort((a, b) => b.cases - a.cases);
-  }, [filteredData]);
-
-  if (loading) {
-    return (
-      <div className="flex min-h-[300px] items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  // Hotspots representing coordinates for Gujarat districts to render glowing hotspots
-  const DISTRICT_COORDS: Record<string, { top: string; left: string }> = {
-    Ahmedabad: { top: "45%", left: "48%" },
-    Gandhinagar: { top: "35%", left: "55%" },
-    Surat: { top: "72%", left: "62%" },
-    Rajkot: { top: "52%", left: "28%" },
-  };
-
-  return (
-    <div className="mt-6 space-y-6">
-      {/* Visual Density Map */}
-      <section className="rounded-3xl border-2 border-border bg-card p-5">
-        <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-          <MapIcon className="h-5 w-5 text-secondary" /> Dynamic Disease Hotspots Map
-        </h2>
-        <p className="text-xs text-muted-foreground mt-1">
-          Visualizing active disease clusters based on AI diagnostic results to place new camps.
-        </p>
-
-        <div className="relative mt-4 h-[240px] w-full overflow-hidden rounded-2xl border border-border bg-muted/30">
-          <div
-            className="absolute inset-0 opacity-20"
-            style={{
-              backgroundImage:
-                "linear-gradient(to right, var(--color-border) 1px, transparent 1px), linear-gradient(to bottom, var(--color-border) 1px, transparent 1px)",
-              backgroundSize: "20px 20px",
-            }}
-          />
-          
-          {/* Render real-time active spots */}
-          {districtChartData.map((d) => {
-            const coords = DISTRICT_COORDS[d.name] || { top: "50%", left: "50%" };
-            const isHigh = d.value >= 25;
-            const glowColor = isHigh ? "bg-destructive/30" : "bg-warning/30";
-            const pointColor = isHigh ? "bg-destructive" : "bg-warning";
-            
-            return (
-              <div
-                key={d.name}
-                className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center animate-fade-in"
-                style={{ top: coords.top, left: coords.left }}
-              >
-                <span className={`absolute -inset-4 animate-ping rounded-full ${glowColor}`} />
-                <span className={`relative grid h-8 w-8 place-items-center rounded-full text-[10px] font-black text-white shadow-md ${pointColor}`}>
-                  {d.value}
-                </span>
-                <span className="mt-1 block rounded bg-card/95 border border-border px-1.5 py-0.5 text-[9px] font-bold text-foreground shadow-sm whitespace-nowrap">
-                  {d.name}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Interactive Filters */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-border bg-background p-3">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Filter District</label>
-          <select
-            value={selectedDistrict}
-            onChange={(e) => setSelectedDistrict(e.target.value)}
-            className="w-full bg-transparent text-sm font-bold text-foreground focus:outline-none"
-          >
-            {districts.map((d) => (
-              <option key={d} value={d} className="bg-card text-foreground">{d}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="rounded-2xl border border-border bg-background p-3">
-          <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Filter Disease</label>
-          <select
-            value={selectedDisease}
-            onChange={(e) => setSelectedDisease(e.target.value)}
-            className="w-full bg-transparent text-sm font-bold text-foreground focus:outline-none"
-          >
-            {diseases.map((d) => (
-              <option key={d} value={d} className="bg-card text-foreground">{d}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Chart */}
-      {districtChartData.length > 0 && (
-        <section className="rounded-3xl border-2 border-border bg-card p-5">
-          <h2 className="text-base font-bold text-foreground mb-4">Cases Count by District</h2>
-          <div className="h-44 w-full text-xs">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={districtChartData} layout="vertical" margin={{ left: -10, right: 10, top: 0, bottom: 0 }}>
-                <XAxis type="number" stroke="#888888" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis dataKey="name" type="category" stroke="#888888" fontSize={11} tickLine={false} axisLine={false} width={80} />
-                <Tooltip
-                  cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
-                  contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", color: "hsl(var(--foreground))" }}
-                />
-                <Bar dataKey="value" radius={[0, 6, 6, 0]}>
-                  {districtChartData.map((entry, index) => {
-                    const fill = entry.value >= 25 ? "var(--color-destructive)" : "var(--color-primary)";
-                    return <Cell key={`cell-${index}`} fill={fill} />;
-                  })}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      )}
-
-      {/* Active Disease Breakdown */}
-      <section className="rounded-3xl border-2 border-border bg-card p-5">
-        <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-          <Activity className="h-5 w-5 text-primary" /> Active Disease Clusters
-        </h2>
-        <div className="mt-3 divide-y divide-border">
-          {diseaseBreakdown.map((item, idx) => (
-            <div key={idx} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
-              <span className="text-sm font-semibold text-foreground">{item.disease}</span>
-              <span className="rounded-full bg-secondary/15 px-2.5 py-0.5 text-xs font-bold text-secondary">
-                {item.cases} cases
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Camp Placement Recommendations */}
-      <section className="rounded-3xl border-2 border-primary/30 bg-primary/5 p-5">
-        <h2 className="text-base font-black text-primary flex items-center gap-2">
-          <Stethoscope className="h-5 w-5" /> AI Health Camp Recommendations
-        </h2>
-        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-          Optimized locations based on localized patient diagnostic intake data.
-        </p>
-
-        <div className="mt-4 space-y-3">
-          {placementRecommendations.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">No current high-density clusters to recommend camp placement.</p>
-          ) : (
-            placementRecommendations.map((rec, i) => (
-              <div key={i} className="rounded-2xl border border-border bg-card p-4 shadow-sm flex flex-col gap-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
-                    <MapPin className="h-3.5 w-3.5 text-primary" /> {rec.district}
-                  </span>
-                  <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-bold text-destructive">
-                    Cluster size: {rec.cases}
-                  </span>
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-foreground">{rec.campType}</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Target disease: {rec.disease}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => toast.success("Camp request sent to health officers", { description: `${rec.campType} in ${rec.district}` })}
-                  className="w-full rounded-xl bg-secondary py-2 text-xs font-black text-secondary-foreground shadow active:scale-[0.98]"
-                >
-                  {rec.actionLabel}
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-    </div>
-  );
-}
-

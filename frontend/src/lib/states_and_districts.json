@@ -112,9 +112,7 @@
     "Vaishali",
     "West Champaran"
   ],
-  "Chandigarh": [
-    "Chandigarh"
-  ],
+  "Chandigarh": ["Chandigarh"],
   "Chhattisgarh": [
     "Balod",
     "Baloda Bazar",
@@ -144,11 +142,7 @@
     "Surajpur",
     "Surguja"
   ],
-  "Dadra and Nagar Haveli and Daman and Diu": [
-    "Dadra & Nagar Haveli",
-    "Daman",
-    "Diu"
-  ],
+  "Dadra and Nagar Haveli and Daman and Diu": ["Dadra & Nagar Haveli", "Daman", "Diu"],
   "Delhi": [
     "Central Delhi",
     "East Delhi",
@@ -162,10 +156,7 @@
     "South West  Delhi",
     "West Delhi"
   ],
-  "Goa": [
-    "North Goa",
-    "South Goa"
-  ],
+  "Goa": ["North Goa", "South Goa"],
   "Gujarat": [
     "Ahmedabad",
     "Amreli",
@@ -526,12 +517,7 @@
     "Sonepur",
     "Sundargarh"
   ],
-  "Puducherry": [
-    "Karaikal",
-    "Mahe",
-    "Pondicherry",
-    "Yanam"
-  ],
+  "Puducherry": ["Karaikal", "Mahe", "Pondicherry", "Yanam"],
   "Punjab": [
     "Amritsar",
     "Barnala",
@@ -591,12 +577,7 @@
     "Tonk",
     "Udaipur"
   ],
-  "Sikkim": [
-    "East Sikkim",
-    "North Sikkim",
-    "South Sikkim",
-    "West Sikkim"
-  ],
+  "Sikkim": ["East Sikkim", "North Sikkim", "South Sikkim", "West Sikkim"],
   "Tamil Nadu": [
     "Ariyalur",
     "Chennai",
@@ -789,13 +770,6 @@
     "South 24 Parganas",
     "Uttar Dinajpur (North Dinajpur)"
   ],
-  "Andaman and Nicobar Islands": [
-    "Nicobar",
-    "North and Middle Andaman",
-    "South Andaman"
-  ],
-  "Ladakh": [
-    "Kargil",
-    "Leh"
-  ]
+  "Andaman and Nicobar Islands": ["Nicobar", "North and Middle Andaman", "South Andaman"],
+  "Ladakh": ["Kargil", "Leh"]
 }

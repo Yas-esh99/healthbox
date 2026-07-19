@@ -32,16 +32,14 @@ function cleanText(text: string): string {
   return cleaned.trim();
 }
 
-
-
 // Render bold (**text**) and links ([label](url)) inline
 function renderInlineStyles(text: string): React.ReactNode {
   const boldParts = text.split(/\*\*([^*]+)\*\*/g);
-  
+
   return boldParts.map((part, index) => {
     const isBold = index % 2 === 1;
     const parsedContent = parseLinks(part);
-    
+
     if (isBold) {
       return (
         <strong key={index} className="font-extrabold text-foreground">
@@ -75,7 +73,7 @@ function parseLinks(text: string): React.ReactNode {
           className="text-primary font-bold underline hover:text-primary/80 transition-colors inline-flex items-center gap-0.5"
         >
           {label}
-        </Link>
+        </Link>,
       );
     } else {
       parts.push(
@@ -87,7 +85,7 @@ function parseLinks(text: string): React.ReactNode {
           className="text-primary font-bold underline hover:text-primary/80 transition-colors inline-flex items-center gap-0.5"
         >
           {label}
-        </a>
+        </a>,
       );
     }
 
@@ -104,12 +102,12 @@ function parseLinks(text: string): React.ReactNode {
 // Premium Markdown / Rich Message Renderer Component
 function FormattedChatMessage({ text }: { text: string }) {
   const lines = text.split("\n");
-  
+
   return (
     <div className="space-y-2 text-[15px] leading-relaxed">
       {lines.map((line, lineIdx) => {
         const trimmed = line.trim();
-        
+
         if (trimmed.startsWith("### ")) {
           return (
             <h3 key={lineIdx} className="text-base font-black mt-3 text-foreground tracking-tight">
@@ -132,7 +130,8 @@ function FormattedChatMessage({ text }: { text: string }) {
           );
         }
 
-        const isBullet = trimmed.startsWith("* ") || trimmed.startsWith("- ") || trimmed.startsWith("• ");
+        const isBullet =
+          trimmed.startsWith("* ") || trimmed.startsWith("- ") || trimmed.startsWith("• ");
         if (isBullet) {
           return (
             <div key={lineIdx} className="flex items-start gap-2 pl-2">
@@ -193,7 +192,7 @@ function ChatPage() {
     if (!value) return;
     const userMsg: Msg = { id: idSeq++, from: "user", text: value };
     setInput("");
-    
+
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
 
@@ -206,16 +205,13 @@ function ChatPage() {
         })),
       };
 
-      const res = await apiFetch("/chat", {
+      const res = (await apiFetch("/chat", {
         method: "POST",
         body: JSON.stringify(payload),
-      }) as { reply: string };
+      })) as { reply: string };
 
       const replyText = res.reply.trim();
-      setMessages((m) => [
-        ...m,
-        { id: idSeq++, from: "bot", text: replyText },
-      ]);
+      setMessages((m) => [...m, { id: idSeq++, from: "bot", text: replyText }]);
     } catch (err) {
       toast.error("Failed to connect to Health Assistant");
       console.error(err);
@@ -248,7 +244,7 @@ function ChatPage() {
 
     // Attempt to locate a localized voice
     const voices = window.speechSynthesis.getVoices();
-    const matchingVoice = voices.find(v => v.lang.startsWith(utterance.lang));
+    const matchingVoice = voices.find((v) => v.lang.startsWith(utterance.lang));
     if (matchingVoice) {
       utterance.voice = matchingVoice;
     }
@@ -267,7 +263,8 @@ function ChatPage() {
   };
 
   const toggleSpeechInput = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       toast.error("Voice input is not supported in this browser.");
       return;
@@ -356,8 +353,8 @@ function ChatPage() {
       </header>
 
       {/* Messages */}
-      <div 
-        ref={scrollRef} 
+      <div
+        ref={scrollRef}
         className="mx-auto w-full max-w-2xl flex-1 space-y-5 overflow-y-auto px-5 py-5 pb-56 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {messages.map((m) =>
@@ -376,7 +373,9 @@ function ChatPage() {
                   aria-label="Play audio"
                   className={
                     "mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/50 px-3 py-1 text-xs font-bold transition-all hover:bg-background shadow-xs hover:border-primary/30 " +
-                    (speakingId === m.id ? "text-primary border-primary/30 bg-primary/5 animate-pulse" : "text-muted-foreground hover:text-foreground")
+                    (speakingId === m.id
+                      ? "text-primary border-primary/30 bg-primary/5 animate-pulse"
+                      : "text-muted-foreground hover:text-foreground")
                   }
                 >
                   <Volume2 className="h-3.5 w-3.5" />
@@ -440,8 +439,8 @@ function ChatPage() {
               aria-label="Voice input"
               className={
                 "grid h-12 w-12 shrink-0 place-items-center rounded-full border border-border transition-all shadow-xs " +
-                (isListening 
-                  ? "bg-red-500 border-red-500 text-white animate-pulse shadow-md scale-108" 
+                (isListening
+                  ? "bg-red-500 border-red-500 text-white animate-pulse shadow-md scale-108"
                   : "bg-background text-primary hover:border-primary/45 active:bg-muted active:scale-95")
               }
             >

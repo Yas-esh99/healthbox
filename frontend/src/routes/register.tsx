@@ -37,7 +37,6 @@ export const Route = createFileRoute("/register")({
   component: RegisterPage,
 });
 
-
 const GENDERS = [
   { value: "male", translationKey: "gender_male" as const, icon: Mars },
   { value: "female", translationKey: "gender_female" as const, icon: Venus },
@@ -76,13 +75,23 @@ function RegisterPage() {
   const [registering, setRegistering] = useState(false);
 
   // Dynamic location queries
-  const { data: statesList, error: statesError, isLoading: statesLoading, refetch: refetchStates } = useQuery({
+  const {
+    data: statesList,
+    error: statesError,
+    isLoading: statesLoading,
+    refetch: refetchStates,
+  } = useQuery({
     queryKey: ["states"],
     queryFn: fetchStates,
     staleTime: Infinity,
   });
 
-  const { data: citiesList, error: citiesError, isLoading: citiesLoading, refetch: refetchCities } = useQuery({
+  const {
+    data: citiesList,
+    error: citiesError,
+    isLoading: citiesLoading,
+    refetch: refetchCities,
+  } = useQuery({
     queryKey: ["cities", state],
     queryFn: () => fetchCities(state),
     enabled: !!state,
@@ -136,9 +145,7 @@ function RegisterPage() {
     setConditions((prev) => {
       if (c === "None") return prev.includes("None") ? [] : ["None"];
       const without = prev.filter((x) => x !== "None");
-      return without.includes(c)
-        ? without.filter((x) => x !== c)
-        : [...without, c];
+      return without.includes(c) ? without.filter((x) => x !== c) : [...without, c];
     });
   };
 
@@ -177,10 +184,7 @@ function RegisterPage() {
           {/* Segmented progress bar */}
           <div className="flex gap-2">
             {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-              <div
-                key={i}
-                className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted"
-              >
+              <div key={i} className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
                 <div
                   className={cn(
                     "h-full rounded-full bg-secondary transition-all duration-500",
@@ -196,17 +200,12 @@ function RegisterPage() {
         <div className="flex-1">
           <div
             key={step}
-            className={cn(
-              dir === "next" ? "animate-slide-in-right" : "animate-fade-in",
-            )}
+            className={cn(dir === "next" ? "animate-slide-in-right" : "animate-fade-in")}
           >
             {step === 1 && (
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="name"
-                    className="flex items-center gap-2 text-base font-semibold"
-                  >
+                  <Label htmlFor="name" className="flex items-center gap-2 text-base font-semibold">
                     <User className="h-5 w-5 text-primary" /> {t("name_label")}
                   </Label>
                   <Input
@@ -259,7 +258,9 @@ function RegisterPage() {
                   </Label>
                   {!state ? (
                     <div className="flex h-14 w-full items-center justify-between rounded-2xl border-2 px-4 bg-card text-muted-foreground opacity-60">
-                      <span className="text-base">{t("placeholder_state_first") || "Choose state first"}</span>
+                      <span className="text-base">
+                        {t("placeholder_state_first") || "Choose state first"}
+                      </span>
                     </div>
                   ) : citiesLoading ? (
                     <div className="flex h-14 w-full items-center justify-between rounded-2xl border-2 px-4 bg-card text-muted-foreground">
@@ -298,9 +299,7 @@ function RegisterPage() {
                     <Calendar className="h-5 w-5 text-primary" /> {t("age_label")}
                   </Label>
                   <div className="rounded-3xl border-2 border-border bg-card p-6 text-center">
-                    <span className="text-5xl font-extrabold text-primary">
-                      {age}
-                    </span>
+                    <span className="text-5xl font-extrabold text-primary">{age}</span>
                     <span className="ml-2 text-lg text-muted-foreground">{t("years_text")}</span>
                     <Slider
                       value={[age]}
@@ -326,9 +325,7 @@ function RegisterPage() {
                           onClick={() => setGender(g.value)}
                           className={cn(
                             "flex flex-col items-center gap-3 rounded-3xl border-2 p-5 transition-all active:scale-95",
-                            active
-                              ? "border-secondary bg-secondary/10"
-                              : "border-border bg-card",
+                            active ? "border-secondary bg-secondary/10" : "border-border bg-card",
                           )}
                         >
                           <Icon
@@ -353,9 +350,7 @@ function RegisterPage() {
                   onClick={() => setHasAyushman((v) => !v)}
                   className={cn(
                     "flex w-full items-center gap-4 rounded-3xl border-2 p-5 text-left transition-all active:scale-[0.98]",
-                    hasAyushman
-                      ? "border-secondary bg-secondary/10"
-                      : "border-border bg-card",
+                    hasAyushman ? "border-secondary bg-secondary/10" : "border-border bg-card",
                   )}
                 >
                   <span
@@ -369,12 +364,8 @@ function RegisterPage() {
                     <ShieldCheck className="h-6 w-6" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-base font-bold">
-                      Ayushman Bharat Card
-                    </span>
-                    <span className="block text-sm text-muted-foreground">
-                      {t("ayushman_sub")}
-                    </span>
+                    <span className="block text-base font-bold">Ayushman Bharat Card</span>
+                    <span className="block text-sm text-muted-foreground">{t("ayushman_sub")}</span>
                   </span>
                   <span
                     className={cn(
@@ -390,10 +381,7 @@ function RegisterPage() {
 
                 {hasAyushman && (
                   <div className="animate-fade-in space-y-3 rounded-3xl border-2 border-border bg-card p-5">
-                    <Label
-                      htmlFor="card"
-                      className="text-base font-semibold"
-                    >
+                    <Label htmlFor="card" className="text-base font-semibold">
                       {t("ayushman_card_number")}
                     </Label>
                     <Input
@@ -428,9 +416,7 @@ function RegisterPage() {
                           onClick={() => toggleCondition(c.value)}
                           className={cn(
                             "flex w-full items-center gap-3 rounded-2xl border-2 p-4 text-left transition-all active:scale-[0.98]",
-                            active
-                              ? "border-secondary bg-secondary/10"
-                              : "border-border",
+                            active ? "border-secondary bg-secondary/10" : "border-border",
                           )}
                         >
                           <span

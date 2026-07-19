@@ -100,13 +100,23 @@ function ProfilePage() {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   // Dynamic location queries
-  const { data: statesList, error: statesError, isLoading: statesLoading, refetch: refetchStates } = useQuery({
+  const {
+    data: statesList,
+    error: statesError,
+    isLoading: statesLoading,
+    refetch: refetchStates,
+  } = useQuery({
     queryKey: ["states"],
     queryFn: fetchStates,
     staleTime: Infinity,
   });
 
-  const { data: citiesList, error: citiesError, isLoading: citiesLoading, refetch: refetchCities } = useQuery({
+  const {
+    data: citiesList,
+    error: citiesError,
+    isLoading: citiesLoading,
+    refetch: refetchCities,
+  } = useQuery({
     queryKey: ["cities", stateValue],
     queryFn: () => fetchCities(stateValue),
     enabled: !!stateValue,
@@ -140,7 +150,6 @@ function ProfilePage() {
     setStateValue(val);
     setCityValue("");
   };
-
 
   // Convert uploaded image to resized base64
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {

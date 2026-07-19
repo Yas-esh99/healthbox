@@ -134,7 +134,7 @@ export const TRANSLATIONS = {
     scheme_benefits: "Scheme Benefits",
     treated_categories: "Treated Categories",
     coverage_limit: "Coverage Limit",
-    apply_now: "Apply Now"
+    apply_now: "Apply Now",
   },
   hi: {
     // Navigation
@@ -222,7 +222,7 @@ export const TRANSLATIONS = {
     scheme_benefits: "योजना के लाभ",
     treated_categories: "उपचार की श्रेणियां",
     coverage_limit: "कवरेज सीमा",
-    apply_now: "अभी आवेदन करें"
+    apply_now: "अभी आवेदन करें",
   },
   gu: {
     // Navigation
@@ -310,7 +310,7 @@ export const TRANSLATIONS = {
     scheme_benefits: "યોજનાના લાભો",
     treated_categories: "સારવારની શ્રેણીઓ",
     coverage_limit: "કવરેજ મર્યાદા",
-    apply_now: "હમણાં અરજી કરો"
+    apply_now: "હમણાં અરજી કરો",
   },
   mr: {
     // Navigation
@@ -379,11 +379,11 @@ export const TRANSLATIONS = {
     scheme_benefits: "योजनेचे फायदे",
     treated_categories: "उपचार श्रेणी",
     coverage_limit: "कवरेज मर्यादा",
-    apply_now: "आता अर्ज करा"
-  }
+    apply_now: "आता अर्ज करा",
+  },
 } as const;
 
-export type TranslationKey = keyof typeof TRANSLATIONS["en"];
+export type TranslationKey = keyof (typeof TRANSLATIONS)["en"];
 
 export function useTranslation() {
   const { language } = useLanguage();

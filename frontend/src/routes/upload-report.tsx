@@ -26,11 +26,13 @@ function UploadReportPage() {
         if (inputRef.current) inputRef.current.value = "";
         return;
       }
-      
+
       // Client-side file type check
       const allowedTypes = ["image/jpeg", "image/png", "application/pdf"];
       if (!allowedTypes.includes(selected.type)) {
-        toast.error("Unsupported file type", { description: "Please upload a JPEG, PNG, or PDF report." });
+        toast.error("Unsupported file type", {
+          description: "Please upload a JPEG, PNG, or PDF report.",
+        });
         setFile(null);
         if (inputRef.current) inputRef.current.value = "";
         return;
@@ -78,9 +80,10 @@ function UploadReportPage() {
           });
           break; // Success! Exit the retry loop.
         } catch (err: any) {
-          const isUnavailable = err.status === 503 || 
-                                (err.message && err.message.includes("503")) || 
-                                (err.detail && err.detail.includes("UNAVAILABLE"));
+          const isUnavailable =
+            err.status === 503 ||
+            (err.message && err.message.includes("503")) ||
+            (err.detail && err.detail.includes("UNAVAILABLE"));
 
           if (isUnavailable && attempt < maxAttempts) {
             console.warn(`Attempt ${attempt} failed with 503/UNAVAILABLE. Retrying...`, err);
@@ -103,15 +106,16 @@ function UploadReportPage() {
       });
 
       toast.success("Analysis complete and saved!", { id: toastId });
-      
+
       // 3. Navigate to triage-results with report state
       navigate({ to: "/triage-results", state: { report } as Record<string, unknown> });
     } catch (err: any) {
       console.error("Analysis failed:", err);
       let errMsg = err.detail || err.message || "Unknown error during report analysis.";
-      const isUnavailable = err.status === 503 || 
-                            (err.message && err.message.includes("503")) || 
-                            (err.detail && err.detail.includes("UNAVAILABLE"));
+      const isUnavailable =
+        err.status === 503 ||
+        (err.message && err.message.includes("503")) ||
+        (err.detail && err.detail.includes("UNAVAILABLE"));
       if (isUnavailable) {
         errMsg = "The AI service is busy right now — please try again in a moment.";
       }
@@ -176,9 +180,7 @@ function UploadReportPage() {
             <span className="text-lg font-bold text-foreground max-w-full truncate px-4">
               {file ? file.name : "Tap to select a file"}
             </span>
-            <span className="text-sm text-muted-foreground">
-              Images or PDFs up to 10 MB
-            </span>
+            <span className="text-sm text-muted-foreground">Images or PDFs up to 10 MB</span>
           </button>
         </div>
 
