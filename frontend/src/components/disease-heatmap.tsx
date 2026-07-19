@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { Map as MapIcon, Loader2, Activity, Stethoscope, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
@@ -8,19 +8,29 @@ interface DiseaseHeatmapViewProps {
   data: HeatmapDataPoint[];
   loading: boolean;
   initialDisease?: string;
+  hideCampRecommendations?: boolean;
 }
 
-// Hotspots representing coordinates for Gujarat districts to render glowing hotspots
-const DISTRICT_COORDS: Record<string, { top: string; left: string }> = {
-  Ahmedabad: { top: "45%", left: "48%" },
-  Gandhinagar: { top: "35%", left: "55%" },
-  Surat: { top: "72%", left: "62%" },
-  Rajkot: { top: "52%", left: "28%" },
-};
+const RealHeatmapMap = lazy(() => {
+  if (typeof window === "undefined") {
+    return Promise.resolve({ default: () => null });
+  }
+  return import("./real-heatmap-map").then((m) => ({ default: m.RealHeatmapMap }));
+});
 
-export function DiseaseHeatmapView({ data, loading, initialDisease }: DiseaseHeatmapViewProps) {
+export function DiseaseHeatmapView({
+  data,
+  loading,
+  initialDisease,
+  hideCampRecommendations = false,
+}: DiseaseHeatmapViewProps) {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("All");
   const [selectedDisease, setSelectedDisease] = useState<string>(initialDisease || "All");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setSelectedDisease(initialDisease || "All");
@@ -68,6 +78,27 @@ export function DiseaseHeatmapView({ data, loading, initialDisease }: DiseaseHea
     return Object.entries(map)
       .map(([disease, cases]) => ({ disease, cases }))
       .sort((a, b) => b.cases - a.cases);
+  }, [filteredData]);
+
+  // Aggregated data by district with top disease for the Leaflet map
+  const districtMapData = useMemo(() => {
+    const districtDiseaseCases: Record<string, Record<string, number>> = {};
+    filteredData.forEach((x) => {
+      if (!districtDiseaseCases[x.district]) districtDiseaseCases[x.district] = {};
+      districtDiseaseCases[x.district][x.disease] =
+        (districtDiseaseCases[x.district][x.disease] || 0) + x.cases_count;
+    });
+
+    return Object.entries(districtDiseaseCases).map(([name, diseasesMap]) => {
+      const sortedDiseases = Object.entries(diseasesMap).sort((a, b) => b[1] - a[1]);
+      const topDisease = sortedDiseases[0]?.[0] || "None";
+      const totalCases = Object.values(diseasesMap).reduce((sum, count) => sum + count, 0);
+      return {
+        name,
+        value: totalCases,
+        topDisease,
+      };
+    });
   }, [filteredData]);
 
   // Automated health camp placement recommendation suggestions
@@ -152,47 +183,28 @@ export function DiseaseHeatmapView({ data, loading, initialDisease }: DiseaseHea
       {/* Visual Density Map */}
       <section className="rounded-3xl border-2 border-border bg-card p-5">
         <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-          <MapIcon className="h-5 w-5 text-secondary" /> Dynamic Disease Hotspots Map
+          <MapIcon className="h-5 w-5 text-secondary" /> HealthBox Disease Hotspots Map
         </h2>
         <p className="text-xs text-muted-foreground mt-1">
           Visualizing active disease clusters based on AI diagnostic results to place new camps.
         </p>
 
-        <div className="relative mt-4 h-[240px] w-full overflow-hidden rounded-2xl border border-border bg-muted/30">
-          <div
-            className="absolute inset-0 opacity-20"
-            style={{
-              backgroundImage:
-                "linear-gradient(to right, var(--color-border) 1px, transparent 1px), linear-gradient(to bottom, var(--color-border) 1px, transparent 1px)",
-              backgroundSize: "20px 20px",
-            }}
-          />
-
-          {/* Render real-time active spots */}
-          {districtChartData.map((d) => {
-            const coords = DISTRICT_COORDS[d.name] || { top: "50%", left: "50%" };
-            const isHigh = d.value >= 25;
-            const glowColor = isHigh ? "bg-destructive/30" : "bg-warning/30";
-            const pointColor = isHigh ? "bg-destructive" : "bg-warning";
-
-            return (
-              <div
-                key={d.name}
-                className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center animate-fade-in"
-                style={{ top: coords.top, left: coords.left }}
-              >
-                <span className={`absolute -inset-4 animate-ping rounded-full ${glowColor}`} />
-                <span
-                  className={`relative grid h-8 w-8 place-items-center rounded-full text-[10px] font-black text-white shadow-md ${pointColor}`}
-                >
-                  {d.value}
-                </span>
-                <span className="mt-1 block rounded bg-card/95 border border-border px-1.5 py-0.5 text-[9px] font-bold text-foreground shadow-sm whitespace-nowrap">
-                  {d.name}
-                </span>
-              </div>
-            );
-          })}
+        <div className="relative mt-4 h-[300px] w-full overflow-hidden rounded-2xl border border-border bg-muted/30">
+          {mounted ? (
+            <Suspense
+              fallback={
+                <div className="h-full w-full flex items-center justify-center text-xs font-semibold text-muted-foreground">
+                  Loading map components...
+                </div>
+              }
+            >
+              <RealHeatmapMap data={districtMapData} />
+            </Suspense>
+          ) : (
+            <div className="h-full w-full flex items-center justify-center text-xs font-semibold text-muted-foreground">
+              Loading map...
+            </div>
+          )}
         </div>
       </section>
 
@@ -303,55 +315,57 @@ export function DiseaseHeatmapView({ data, loading, initialDisease }: DiseaseHea
       </section>
 
       {/* Camp Placement Recommendations */}
-      <section className="rounded-3xl border-2 border-primary/30 bg-primary/5 p-5">
-        <h2 className="text-base font-black text-primary flex items-center gap-2">
-          <Stethoscope className="h-5 w-5" /> AI Health Camp Recommendations
-        </h2>
-        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-          Optimized locations based on localized patient diagnostic intake data.
-        </p>
+      {!hideCampRecommendations && (
+        <section className="rounded-3xl border-2 border-primary/30 bg-primary/5 p-5">
+          <h2 className="text-base font-black text-primary flex items-center gap-2">
+            <Stethoscope className="h-5 w-5" /> AI Health Camp Recommendations
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            Optimized locations based on localized patient diagnostic intake data.
+          </p>
 
-        <div className="mt-4 space-y-3">
-          {placementRecommendations.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">
-              No current high-density clusters to recommend camp placement.
-            </p>
-          ) : (
-            placementRecommendations.map((rec, i) => (
-              <div
-                key={i}
-                className="rounded-2xl border border-border bg-card p-4 shadow-sm flex flex-col gap-2.5"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
-                    <MapPin className="h-3.5 w-3.5 text-primary" /> {rec.district}
-                  </span>
-                  <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-bold text-destructive">
-                    Cluster size: {rec.cases}
-                  </span>
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-foreground">{rec.campType}</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Target disease: {rec.disease}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    toast.success("Camp request sent to health officers", {
-                      description: `${rec.campType} in ${rec.district}`,
-                    })
-                  }
-                  className="w-full rounded-xl bg-secondary py-2 text-xs font-black text-secondary-foreground shadow active:scale-[0.98]"
+          <div className="mt-4 space-y-3">
+            {placementRecommendations.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">
+                No current high-density clusters to recommend camp placement.
+              </p>
+            ) : (
+              placementRecommendations.map((rec, i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-border bg-card p-4 shadow-sm flex flex-col gap-2.5"
                 >
-                  {rec.actionLabel}
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
+                      <MapPin className="h-3.5 w-3.5 text-primary" /> {rec.district}
+                    </span>
+                    <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-bold text-destructive">
+                      Cluster size: {rec.cases}
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">{rec.campType}</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Target disease: {rec.disease}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      toast.success("Camp request sent to health officers", {
+                        description: `${rec.campType} in ${rec.district}`,
+                      })
+                    }
+                    className="w-full rounded-xl bg-secondary py-2 text-xs font-black text-secondary-foreground shadow active:scale-[0.98]"
+                  >
+                    {rec.actionLabel}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

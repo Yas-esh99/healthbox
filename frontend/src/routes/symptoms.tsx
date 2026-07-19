@@ -469,7 +469,10 @@ function SymptomsPage() {
           condition_stage: "Acute",
           clinical_evidence: ["Symptom onset today", "Coughing & shortness of breath"],
           approved_protocols: ["Sit upright", "Use rescue inhaler as prescribed"],
-          contraindicated_actions: ["Avoid smoking or dust exposure", "Do not engage in heavy exercise"],
+          contraindicated_actions: [
+            "Avoid smoking or dust exposure",
+            "Do not engage in heavy exercise",
+          ],
           precautions: ["Seek emergency care if breathing does not improve within 15 minutes"],
         };
       }
