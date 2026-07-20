@@ -56,3 +56,32 @@ def get_disease_heatmap(request: Request, disease: str | None = None) -> list[He
     return [HeatmapPoint(**p) for p in data]
 
 
+@router.delete("/{record_id}", status_code=status.HTTP_200_OK)
+def delete_record(
+    record_id: str,
+    request: Request,
+    phone_number: str = Depends(get_current_phone),
+):
+    """Delete a specific diagnostic triage record for the authenticated user."""
+    repository = request.app.state.records_repository
+    success = repository.delete(record_id=record_id, phone_number=phone_number)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Record not found or not owned by the current user.",
+        )
+    return {"status": "success", "message": "Record deleted successfully."}
+
+
+@router.delete("", status_code=status.HTTP_200_OK)
+def delete_all_records(
+    request: Request,
+    phone_number: str = Depends(get_current_phone),
+):
+    """Delete all diagnostic triage records for the authenticated user."""
+    repository = request.app.state.records_repository
+    count = repository.delete_all(phone_number=phone_number)
+    return {"status": "success", "message": f"Successfully deleted {count} record(s)."}
+
+
+

@@ -196,7 +196,10 @@ function ChatPage() {
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [voiceLang, setVoiceLang] = useState("en-IN");
   const [showMicModal, setShowMicModal] = useState(false);
+  const [isRecordingFallback, setIsRecordingFallback] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
@@ -288,19 +291,88 @@ function ChatPage() {
     toast("Speaking response", { description: "Reading the reply aloud" });
   };
 
+  const startFallbackRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: mediaRecorder.mimeType || "audio/webm",
+        });
+        if (audioBlob.size === 0) {
+          setIsRecordingFallback(false);
+          setIsListening(false);
+          return;
+        }
+
+        toast.info("Transcribing voice input...");
+        try {
+          const formData = new FormData();
+          formData.append("file", audioBlob, `speech.${audioBlob.type.split("/")[1] || "webm"}`);
+
+          const res = await apiFetch<{ transcript: string }>("/chat/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (res.transcript) {
+            setInput((prev) => {
+              const space = prev && !prev.endsWith(" ") ? " " : "";
+              return prev + space + res.transcript;
+            });
+            toast.success("Got it! 🎙️", { description: `"${res.transcript}"` });
+          } else {
+            toast.warning("No speech detected", { description: "Please speak clearly and try again." });
+          }
+        } catch (err: any) {
+          console.error("Transcription error:", err);
+          toast.error("Failed to transcribe voice", { description: err.message || "Unknown error" });
+        } finally {
+          setIsRecordingFallback(false);
+          setIsListening(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecordingFallback(true);
+      setIsListening(true);
+      setInput("");
+    } catch (err: any) {
+      console.error("Failed to start backup recorder:", err);
+      toast.error("Microphone access failed", { description: "Please allow microphone access to use voice input." });
+      setIsRecordingFallback(false);
+      setIsListening(false);
+    }
+  };
+
   const startListening = async (lang: string) => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      toast.error("Voice input not supported", {
-        description: "Your browser doesn't support Web Speech API. Try Chrome or Edge.",
-      });
+      toast.info("Browser speech recognition not supported. Using backup voice recorder...");
+      startFallbackRecording();
       return;
     }
 
     if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
+      if (isRecordingFallback) {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+          mediaRecorderRef.current.stop();
+        }
+      } else {
+        recognitionRef.current?.stop();
+        setIsListening(false);
+      }
       return;
     }
 
@@ -322,6 +394,7 @@ function ChatPage() {
 
     rec.onstart = () => {
       setIsListening(true);
+      setInput("");
       const langLabel = VOICE_LANGUAGES.find((l) => l.code === lang)?.label ?? lang;
       toast.info(`Listening in ${langLabel}…`, { description: "Speak now, then pause" });
     };
@@ -349,14 +422,16 @@ function ChatPage() {
             description: "Please enable 'Speech Recognition' in brave://settings/shields.",
           });
         } else {
-          toast.error("Speech service blocked", {
-            description: "Chrome's online speech service is unreachable or blocked.",
+          toast.info("Standard speech recognition blocked. Using backup voice recorder...", {
+            description: "Please speak now, and tap the mic button to finish.",
           });
+          startFallbackRecording();
         }
       } else if (code === "network") {
-        toast.error("Network error", {
-          description: "Speech recognition requires an active internet connection.",
+        toast.info("Standard speech recognition offline. Using backup voice recorder...", {
+          description: "Please speak now, and tap the mic button to finish.",
         });
+        startFallbackRecording();
       } else if (code === "audio-capture") {
         toast.error("No microphone found", {
           description: "Connect a microphone and try again.",
@@ -370,7 +445,9 @@ function ChatPage() {
     };
 
     rec.onend = () => {
-      setIsListening(false);
+      if (!isRecordingFallback) {
+        setIsListening(false);
+      }
     };
 
     recognitionRef.current = rec;
@@ -386,8 +463,14 @@ function ChatPage() {
 
   const handleMicClick = () => {
     if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
+      if (isRecordingFallback) {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+          mediaRecorderRef.current.stop();
+        }
+      } else {
+        recognitionRef.current?.stop();
+        setIsListening(false);
+      }
     } else {
       startListening(voiceLang);
     }
@@ -406,12 +489,15 @@ function ChatPage() {
     }
   }, [currentLanguage]);
 
-  // Clean up speech synthesis when component unmounts
+  // Clean up speech synthesis and recorders when component unmounts
   useEffect(() => {
     return () => {
       window.speechSynthesis.cancel();
       if (recognitionRef.current) {
         recognitionRef.current.stop();
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
       }
     };
   }, []);

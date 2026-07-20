@@ -2,7 +2,7 @@ import os
 import time
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, File, UploadFile
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
@@ -254,4 +254,61 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
             elapsed_time = time.time() - start_time
             logger.error(f"Fallback chat endpoint error with {fallback_model_name} after {elapsed_time:.4f} seconds: {inner_e}")
             raise HTTPException(status_code=500, detail=f"Gemini API Error: {str(inner_e)}")
+
+
+@router.post("/transcribe")
+async def transcribe_endpoint(
+    request: Request,
+    file: UploadFile = File(...)
+):
+    content = await file.read()
+    settings = get_settings()
+    api_key = settings.gemini_api_key
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Gemini API Key is not configured on the server.")
+        
+    client = genai.Client(api_key=api_key)
+    
+    # Pass the audio bytes directly to the Gemini API as a part
+    audio_part = types.Part.from_bytes(
+        data=content,
+        mime_type=file.content_type
+    )
+    
+    prompt = """Transcribe this medical symptom or conversation audio query into text. 
+Return only the transcript text. Do not add any introduction, greeting, or explanation.
+If the audio has no speech or is completely silent, return an empty string."""
+    
+    try:
+        # Try gemini-3.1-flash-lite first
+        model_name = "gemini-3.1-flash-lite"
+        logger.info(f"Attempting transcription using {model_name}...")
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[prompt, audio_part]
+        )
+        transcript = response.text or ""
+        return {"transcript": transcript.strip()}
+    except Exception as e:
+        logger.warning(f"Transcription failed with model {model_name}: {e}. Retrying with fallback model...")
+        
+        # Check if the error is a rate limit or service unavailable (429 or 503)
+        err_msg = str(e).upper()
+        if "503" in err_msg or "429" in err_msg or "UNAVAILABLE" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+            logger.info("Temporary model error detected. Sleeping for 1.5 seconds before retrying...")
+            time.sleep(1.5)
+            
+        try:
+            fallback_model = "gemini-3.5-flash"
+            logger.info(f"Attempting transcription fallback using {fallback_model}...")
+            response = client.models.generate_content(
+                model=fallback_model,
+                contents=[prompt, audio_part]
+            )
+            transcript = response.text or ""
+            return {"transcript": transcript.strip()}
+        except Exception as inner_e:
+            logger.error(f"Fallback transcription failed with model {fallback_model}: {inner_e}")
+            raise HTTPException(status_code=500, detail=f"Transcription failed: {str(inner_e)}")
+
 

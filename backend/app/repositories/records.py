@@ -41,3 +41,25 @@ class FirestoreRecordsRepository:
         for doc in query.stream():
             self.collection.document(doc.id).update({"phone_number": new_phone})
 
+    def delete(self, record_id: str, phone_number: str) -> bool:
+        """Delete a specific triage record for a user, confirming ownership."""
+        doc_ref = self.collection.document(record_id)
+        doc = doc_ref.get()
+        if not doc.exists:
+            return False
+        payload = doc.to_dict() or {}
+        if payload.get("phone_number") != phone_number:
+            return False
+        doc_ref.delete()
+        return True
+
+    def delete_all(self, phone_number: str) -> int:
+        """Delete all triage records for a user, returning the number of deleted records."""
+        query = self.collection.where(filter=FieldFilter("phone_number", "==", phone_number))
+        deleted_count = 0
+        for doc in query.stream():
+            doc.reference.delete()
+            deleted_count += 1
+        return deleted_count
+
+

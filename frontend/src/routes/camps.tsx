@@ -25,10 +25,6 @@ import { SosButton } from "@/components/sos-button";
 import { apiFetch, HeatmapDataPoint } from "@/lib/api";
 import { DiseaseHeatmapView } from "@/components/disease-heatmap";
 
-const RealCampsMap = lazy(() =>
-  import("@/components/real-camps-map").then((mod) => ({ default: mod.RealCampsMap }))
-);
-
 export const Route = createFileRoute("/camps")({
   head: () => ({ meta: [{ title: "Government Hospitals & Camps" }] }),
   component: CampsPage,
@@ -58,26 +54,16 @@ const CAMPS = [
     org: "City Health Dept.",
     date: "Sun, 15 Jun · 10 AM",
     distance: "3.6 km away",
-<<<<<<< HEAD
     lat: 23.01,
     lng: 72.55,
-=======
-    lat: 23.015,
-    lng: 72.56,
->>>>>>> 2da9636441b10546c735f8c2f2c658e8b2896158
   },
   {
     name: "Child Vaccination Drive",
     org: "Govt. Primary Center",
     date: "Wed, 18 Jun · 8 AM",
     distance: "4.1 km away",
-<<<<<<< HEAD
     lat: 23.05,
     lng: 72.6,
-=======
-    lat: 23.04,
-    lng: 72.59,
->>>>>>> 2da9636441b10546c735f8c2f2c658e8b2896158
   },
 ];
 
@@ -116,13 +102,8 @@ const HOSPITALS = [
     status: "24/7 Emergency Wing Active | Beds Available",
     address: "Plot 14, Ring Road, Sector 9, Ahmedabad — 380015",
     desk: "Registration Desk: Block A, Ground Floor · +91 79 4000 1200",
-<<<<<<< HEAD
     lat: 23.04,
     lng: 72.53,
-=======
-    lat: 23.0225,
-    lng: 72.5714,
->>>>>>> 2da9636441b10546c735f8c2f2c658e8b2896158
   },
   {
     name: "District Government General Hospital",
@@ -131,13 +112,8 @@ const HOSPITALS = [
     status: "24/7 Casualty Active | Limited ICU Beds",
     address: "Civil Lines, Main Road, District Health Complex — 380001",
     desk: "Registration Desk: OPD Counter 3 · +91 79 2550 8800",
-<<<<<<< HEAD
     lat: 23.02,
     lng: 72.59,
-=======
-    lat: 23.05,
-    lng: 72.55,
->>>>>>> 2da9636441b10546c735f8c2f2c658e8b2896158
   },
 ];
 

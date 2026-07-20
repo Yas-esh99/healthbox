@@ -1,16 +1,15 @@
 import { useState, useMemo, useEffect, lazy, Suspense } from "react";
-<<<<<<< HEAD
 import { Map as MapIcon, Loader2, Activity, Stethoscope, MapPin, Download } from "lucide-react";
-=======
-import { Map as MapIcon, Loader2, Activity, Stethoscope, MapPin } from "lucide-react";
->>>>>>> 2da9636441b10546c735f8c2f2c658e8b2896158
 import { toast } from "sonner";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
 import { HeatmapDataPoint } from "@/lib/api";
 
-const RealHeatmapMap = lazy(() =>
-  import("./real-heatmap-map").then((mod) => ({ default: mod.RealHeatmapMap }))
-);
+const RealHeatmapMap = lazy(() => {
+  if (typeof window === "undefined") {
+    return Promise.resolve({ default: () => null });
+  }
+  return import("./real-heatmap-map").then((mod) => ({ default: mod.RealHeatmapMap }));
+});
 
 interface DiseaseHeatmapViewProps {
   data: HeatmapDataPoint[];
@@ -18,19 +17,6 @@ interface DiseaseHeatmapViewProps {
   initialDisease?: string;
   hideCampRecommendations?: boolean;
 }
-
-<<<<<<< HEAD
-export function DiseaseHeatmapView({ data, loading, initialDisease }: DiseaseHeatmapViewProps) {
-  const [selectedDistrict, setSelectedDistrict] = useState<string>("All");
-  const [selectedDisease, setSelectedDisease] = useState<string>(initialDisease || "All");
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-=======
-const RealHeatmapMap = lazy(() => {
-  if (typeof window === "undefined") {
-    return Promise.resolve({ default: () => null });
-  }
-  return import("./real-heatmap-map").then((m) => ({ default: m.RealHeatmapMap }));
-});
 
 export function DiseaseHeatmapView({
   data,
@@ -40,7 +26,7 @@ export function DiseaseHeatmapView({
 }: DiseaseHeatmapViewProps) {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("All");
   const [selectedDisease, setSelectedDisease] = useState<string>(initialDisease || "All");
->>>>>>> 2da9636441b10546c735f8c2f2c658e8b2896158
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -73,28 +59,7 @@ export function DiseaseHeatmapView({
     });
   }, [data, selectedDistrict, selectedDisease]);
 
-  // Aggregated data by district for Leaflet real map
-  const districtMapData = useMemo(() => {
-    const map: Record<string, { value: number; topDisease: string; diseaseCounts: Record<string, number> }> = {};
-    filteredData.forEach((x) => {
-      if (!map[x.district]) {
-        map[x.district] = { value: 0, topDisease: "", diseaseCounts: {} };
-      }
-      map[x.district].value += x.cases_count;
-      map[x.district].diseaseCounts[x.disease] =
-        (map[x.district].diseaseCounts[x.disease] || 0) + x.cases_count;
-    });
 
-    return Object.entries(map).map(([name, info]) => {
-      const topDisease =
-        Object.entries(info.diseaseCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Various";
-      return {
-        name,
-        value: info.value,
-        topDisease,
-      };
-    });
-  }, [filteredData]);
 
   // Aggregated data by district for bar chart
   const districtChartData = useMemo(() => {
@@ -439,7 +404,6 @@ export function DiseaseHeatmapView({
     <div className="relative z-0 isolate mt-6 space-y-6">
       {/* Visual Density Map */}
       <section className="rounded-3xl border-2 border-border bg-card p-5">
-<<<<<<< HEAD
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div>
             <h2 className="text-base font-bold text-foreground flex items-center gap-2">
@@ -469,16 +433,6 @@ export function DiseaseHeatmapView({
         </div>
 
         <div className="relative z-0 isolate mt-4 h-[300px] w-full overflow-hidden rounded-2xl border border-border bg-muted/30">
-=======
-        <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-          <MapIcon className="h-5 w-5 text-secondary" /> HealthBox Disease Hotspots Map
-        </h2>
-        <p className="text-xs text-muted-foreground mt-1">
-          Visualizing active disease clusters based on AI diagnostic results to place new camps.
-        </p>
-
-        <div className="relative mt-4 h-[300px] w-full overflow-hidden rounded-2xl border border-border bg-muted/30">
->>>>>>> 2da9636441b10546c735f8c2f2c658e8b2896158
           {mounted ? (
             <Suspense
               fallback={

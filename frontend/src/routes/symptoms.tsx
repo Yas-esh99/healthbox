@@ -264,6 +264,9 @@ function SymptomsPage() {
   const [reportBase64, setReportBase64] = useState<string | null>(null);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const [isRecordingFallback, setIsRecordingFallback] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Check speech support on mount and handle cleanup
   useEffect(() => {
@@ -276,12 +279,16 @@ function SymptomsPage() {
         }
       ).SpeechRecognition ||
         !!(window as Window & { webkitSpeechRecognition?: SpeechRecognitionConstructor })
-          .webkitSpeechRecognition);
+          .webkitSpeechRecognition ||
+        !!(window.navigator && window.navigator.mediaDevices && window.navigator.mediaDevices.getUserMedia));
     setSpeechSupported(isSupported);
 
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.abort();
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
       }
     };
   }, []);
@@ -290,41 +297,86 @@ function SymptomsPage() {
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
   };
 
-  const toggleListening = () => {
-    const isSupported =
-      typeof window !== "undefined" &&
-      (!!(
-        window as Window & {
-          SpeechRecognition?: SpeechRecognitionConstructor;
-          webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  const startFallbackRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
         }
-      ).SpeechRecognition ||
-        !!(window as Window & { webkitSpeechRecognition?: SpeechRecognitionConstructor })
-          .webkitSpeechRecognition);
+      };
 
-    if (!isSupported) {
-      setSpeechError("Voice input is not supported in your browser. Please type your symptoms.");
-      toast.error("Voice input is not supported in your browser.");
-      return;
-    }
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: mediaRecorder.mimeType || "audio/webm",
+        });
+        if (audioBlob.size === 0) {
+          setIsRecordingFallback(false);
+          setListening(false);
+          return;
+        }
 
-    // Insecure context warning
-    if (
-      typeof window !== "undefined" &&
-      window.location.protocol !== "https:" &&
-      window.location.hostname !== "localhost" &&
-      window.location.hostname !== "127.0.0.1"
-    ) {
-      toast.warning("Insecure Context", {
-        description: "Voice input may be blocked by your browser on insecure HTTP connections. Please use localhost or HTTPS if it fails.",
-      });
-    }
+        setSpeechStatus("Transcribing...");
+        toast.info("Transcribing voice input...");
+        try {
+          const formData = new FormData();
+          formData.append("file", audioBlob, `speech.${audioBlob.type.split("/")[1] || "webm"}`);
 
-    if (listening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
+          const res = await apiFetch<{ transcript: string }>("/chat/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (res.transcript) {
+            setTranscript((prev) => (prev ? prev.trim() + " " + res.transcript.trim() : res.transcript.trim()));
+            setSpeechStatus("Recognition completed");
+            toast.success("Got it! 🎙️", { description: `"${res.transcript}"` });
+          } else {
+            setSpeechStatus("No speech detected");
+            toast.warning("No speech detected", { description: "Please speak clearly and try again." });
+          }
+        } catch (err: any) {
+          console.error("Transcription error:", err);
+          setSpeechStatus("Transcription failed");
+          setSpeechError(err.message || "Unknown error during transcription.");
+          toast.error("Failed to transcribe voice", { description: err.message || "Unknown error" });
+        } finally {
+          setIsRecordingFallback(false);
+          setListening(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecordingFallback(true);
+      setListening(true);
+      setSpeechStatus("🎤 Backup Listening...");
+      setTranscript("");
+    } catch (err: any) {
+      console.error("Failed to start backup recorder:", err);
+      setSpeechError("Microphone access failed. Please grant permission.");
+      toast.error("Microphone access failed", { description: "Please allow microphone access to use voice input." });
+      setIsRecordingFallback(false);
       setListening(false);
+    }
+  };
+
+  const toggleListening = () => {
+    if (listening) {
+      if (isRecordingFallback) {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+          mediaRecorderRef.current.stop();
+        }
+      } else {
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
+        }
+        setListening(false);
+      }
       return;
     }
 
@@ -342,8 +394,21 @@ function SymptomsPage() {
         .webkitSpeechRecognition;
 
     if (!SpeechRecognitionAPI) {
-      setSpeechError("Voice input is not supported in your browser. Please type your symptoms.");
+      toast.info("Browser speech recognition not supported. Using backup voice recorder...");
+      startFallbackRecording();
       return;
+    }
+
+    // Insecure context warning
+    if (
+      typeof window !== "undefined" &&
+      window.location.protocol !== "https:" &&
+      window.location.hostname !== "localhost" &&
+      window.location.hostname !== "127.0.0.1"
+    ) {
+      toast.warning("Insecure Context", {
+        description: "Voice input may be blocked by your browser on insecure HTTP connections. Please use localhost or HTTPS if it fails.",
+      });
     }
 
     const recognition = new SpeechRecognitionAPI();
@@ -354,6 +419,7 @@ function SymptomsPage() {
     recognition.onstart = () => {
       setListening(true);
       setSpeechStatus("🎤 Listening...");
+      setTranscript("");
       toast("Listening... Speak your symptoms now.");
     };
 
@@ -375,19 +441,25 @@ function SymptomsPage() {
         setSpeechError("Microphone permission denied. Please grant permission and try again.");
         toast.error("Microphone permission denied.");
       } else if (e.error === "network") {
-        setSpeechStatus("Network error");
-        setSpeechError("Network error. Please check your internet connection.");
-        toast.error("Network error during recognition.");
+        setSpeechStatus("Switching to backup recorder...");
+        toast.info("Standard speech recognition offline. Using backup voice recorder...", {
+          description: "Please speak now, and tap the mic button to finish.",
+        });
+        startFallbackRecording();
       } else {
         setSpeechStatus("Error occurred");
         setSpeechError(`Speech recognition failed: ${e.error}`);
         toast.error(`Recognition error: ${e.error}`);
       }
-      setListening(false);
+      if (!isRecordingFallback) {
+        setListening(false);
+      }
     };
 
     recognition.onend = () => {
-      setListening(false);
+      if (!isRecordingFallback) {
+        setListening(false);
+      }
       recognitionRef.current = null;
     };
 

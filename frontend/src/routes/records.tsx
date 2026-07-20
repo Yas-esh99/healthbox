@@ -17,6 +17,7 @@ import {
   FileText,
   Loader2,
   Download,
+  Trash2,
 } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
 import { apiFetch } from "@/lib/api";
@@ -234,6 +235,43 @@ function RecordsPage() {
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+
+  const handleDeleteAll = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete ALL your diagnostic triage reports? This action cannot be undone."
+    );
+    if (!confirmed) return;
+
+    const toastId = toast.loading("Deleting all reports...");
+    try {
+      await apiFetch("/records", { method: "DELETE" });
+      setRecords([]);
+      toast.success("Successfully deleted all triage records.");
+    } catch (err: any) {
+      console.error("Failed to delete all records:", err);
+      toast.error("Failed to delete records", { description: err.message || "Unknown error" });
+    } finally {
+      toast.dismiss(toastId);
+    }
+  };
+
+  const handleDeleteSingle = async (id: string) => {
+    const confirmed = window.confirm("Are you sure you want to delete this triage report?");
+    if (!confirmed) return;
+
+    const toastId = toast.loading("Deleting report...");
+    try {
+      await apiFetch(`/records/${id}`, { method: "DELETE" });
+      setRecords((prev) => prev.filter((r) => r.id !== id));
+      setOpenId(null);
+      toast.success("Report deleted successfully.");
+    } catch (err: any) {
+      console.error("Failed to delete record:", err);
+      toast.error("Failed to delete record", { description: err.message || "Unknown error" });
+    } finally {
+      toast.dismiss(toastId);
+    }
+  };
 
   const handleSinglePDFDownload = async (record: TriageRecord) => {
     const toastId = toast.loading(`Generating PDF for ${record.title}...`);
@@ -706,19 +744,29 @@ function RecordsPage() {
                 </span>
               </div>
               {records.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleBulkPDFDownload}
-                  disabled={isDownloadingAll}
-                  className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/95 disabled:opacity-50 transition shadow"
-                >
-                  {isDownloadingAll ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5" />
-                  )}
-                  {isDownloadingAll ? "Generating..." : "Download All"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleBulkPDFDownload}
+                    disabled={isDownloadingAll}
+                    className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/95 disabled:opacity-50 transition shadow"
+                  >
+                    {isDownloadingAll ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    {isDownloadingAll ? "Generating..." : "Download All"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteAll}
+                    className="flex items-center gap-1.5 rounded-xl bg-destructive/15 text-destructive hover:bg-destructive/25 px-3 py-2 text-xs font-bold transition shadow"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete All
+                  </button>
+                </div>
               )}
             </div>
 
@@ -810,7 +858,7 @@ function RecordsPage() {
                     return <I className="h-6 w-6" />;
                   })()}
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     {RISK_META[active.risk].label}
                   </p>
@@ -818,6 +866,14 @@ function RecordsPage() {
                     {active.chiefComplaint}
                   </h2>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSingle(active.id)}
+                  className="grid h-9 w-9 place-items-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive/20 active:scale-95 transition-all shrink-0"
+                  title="Delete Report"
+                >
+                  <Trash2 className="h-4.5 w-4.5" />
+                </button>
               </div>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{active.summary}</p>
               <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
