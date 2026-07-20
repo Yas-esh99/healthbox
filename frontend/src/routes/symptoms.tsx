@@ -55,6 +55,29 @@ const SAMPLE_PHRASES = [
   "I also feel very weak.",
 ];
 
+const VOICE_LANGUAGES = [
+  { code: "en-IN", label: "English" },
+  { code: "hi-IN", label: "हिंदी" },
+  { code: "gu-IN", label: "ગુજરાતી" },
+  { code: "mr-IN", label: "मराठी" },
+  { code: "ta-IN", label: "தமிழ்" },
+  { code: "te-IN", label: "తెలుగు" },
+  { code: "kn-IN", label: "ಕನ್ನಡ" },
+  { code: "ml-IN", label: "മലയാളം" },
+  { code: "bn-IN", label: "বাংলা" },
+  { code: "pa-IN", label: "ਪੰਜਾਬੀ" },
+  { code: "or-IN", label: "ଓଡ଼ିଆ" },
+  { code: "ur-PK", label: "اردو" },
+  { code: "ar-SA", label: "العربية" },
+  { code: "fr-FR", label: "Français" },
+  { code: "es-ES", label: "Español" },
+  { code: "de-DE", label: "Deutsch" },
+  { code: "zh-CN", label: "中文" },
+  { code: "ja-JP", label: "日本語" },
+  { code: "ko-KR", label: "한국어" },
+  { code: "pt-BR", label: "Português" },
+];
+
 function Section({
   index,
   title,
@@ -229,11 +252,11 @@ function SymptomsPage() {
 
   const [flags, setFlags] = useState<string[]>([]);
   const [severity, setSeverity] = useState([5]);
-  const [transcript, setTranscript] = useState("");
+   const [transcript, setTranscript] = useState("");
   const [listening, setListening] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
-  const [speechLang, setSpeechLang] = useState("en-US");
+  const [speechLang, setSpeechLang] = useState("en-IN");
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [speechStatus, setSpeechStatus] = useState<string>("");
 
@@ -283,6 +306,18 @@ function SymptomsPage() {
       setSpeechError("Voice input is not supported in your browser. Please type your symptoms.");
       toast.error("Voice input is not supported in your browser.");
       return;
+    }
+
+    // Insecure context warning
+    if (
+      typeof window !== "undefined" &&
+      window.location.protocol !== "https:" &&
+      window.location.hostname !== "localhost" &&
+      window.location.hostname !== "127.0.0.1"
+    ) {
+      toast.warning("Insecure Context", {
+        description: "Voice input may be blocked by your browser on insecure HTTP connections. Please use localhost or HTTPS if it fails.",
+      });
     }
 
     if (listening) {
@@ -837,11 +872,12 @@ function SymptomsPage() {
               <SelectTrigger className="w-44 h-9 rounded-xl text-xs font-bold border-border bg-background">
                 <SelectValue placeholder="Select Language" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="en-US">English (en-US)</SelectItem>
-                <SelectItem value="hi-IN">Hindi (हिन्दी)</SelectItem>
-                <SelectItem value="gu-IN">Gujarati (ગુજરાતી)</SelectItem>
-                <SelectItem value="mr-IN">Marathi (મરાઠી)</SelectItem>
+              <SelectContent className="max-h-60 overflow-y-auto">
+                {VOICE_LANGUAGES.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    {lang.label} ({lang.code})
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

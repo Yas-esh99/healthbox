@@ -298,22 +298,21 @@ function ChatPage() {
       return;
     }
 
-    // Secure context check
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    // Secure context check warning (non-blocking)
     if (
       window.location.protocol !== "https:" &&
       window.location.hostname !== "localhost" &&
       window.location.hostname !== "127.0.0.1"
     ) {
-      toast.error("Secure Context Required", {
-        description: "Browser blocks microphone requests on insecure HTTP connections. Use localhost or HTTPS.",
+      toast.warning("Insecure Context", {
+        description: "Microphone access may be restricted by the browser over non-HTTPS connections. If it fails, please use localhost or HTTPS.",
       });
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
     }
 
     const rec = new SpeechRecognition();
