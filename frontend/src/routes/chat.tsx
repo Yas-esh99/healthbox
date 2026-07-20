@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Send, Volume2, Bot, Mic } from "lucide-react";
+import { Send, Volume2, Bot, Mic, Globe, MicOff, X, Settings, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { BottomNav } from "@/components/bottom-nav";
 import { SosButton } from "@/components/sos-button";
@@ -20,6 +20,29 @@ const QUICK_QUESTIONS = [
   "Nearest hospital",
   "Book a camp",
   "Check symptoms",
+];
+
+const VOICE_LANGUAGES = [
+  { code: "en-IN", label: "English" },
+  { code: "hi-IN", label: "हिंदी" },
+  { code: "gu-IN", label: "ગુજરાતી" },
+  { code: "mr-IN", label: "मराठी" },
+  { code: "ta-IN", label: "தமிழ்" },
+  { code: "te-IN", label: "తెలుగు" },
+  { code: "kn-IN", label: "ಕನ್ನಡ" },
+  { code: "ml-IN", label: "മലയാളം" },
+  { code: "bn-IN", label: "বাংলা" },
+  { code: "pa-IN", label: "ਪੰਜਾਬੀ" },
+  { code: "or-IN", label: "ଓଡ଼ିଆ" },
+  { code: "ur-PK", label: "اردو" },
+  { code: "ar-SA", label: "العربية" },
+  { code: "fr-FR", label: "Français" },
+  { code: "es-ES", label: "Español" },
+  { code: "de-DE", label: "Deutsch" },
+  { code: "zh-CN", label: "中文" },
+  { code: "ja-JP", label: "日本語" },
+  { code: "ko-KR", label: "한국어" },
+  { code: "pt-BR", label: "Português" },
 ];
 
 function cleanText(text: string): string {
@@ -170,6 +193,9 @@ function ChatPage() {
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [showLangPicker, setShowLangPicker] = useState(false);
+  const [voiceLang, setVoiceLang] = useState("en-IN");
+  const [showMicModal, setShowMicModal] = useState(false);
   const recognitionRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -262,11 +288,25 @@ function ChatPage() {
     toast("Speaking response", { description: "Reading the reply aloud" });
   };
 
-  const toggleSpeechInput = () => {
+  const startListening = async (lang: string) => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      toast.error("Voice input is not supported in this browser.");
+      toast.error("Voice input not supported", {
+        description: "Your browser doesn't support Web Speech API. Try Chrome or Edge.",
+      });
+      return;
+    }
+
+    // Secure context check
+    if (
+      window.location.protocol !== "https:" &&
+      window.location.hostname !== "localhost" &&
+      window.location.hostname !== "127.0.0.1"
+    ) {
+      toast.error("Secure Context Required", {
+        description: "Browser blocks microphone requests on insecure HTTP connections. Use localhost or HTTPS.",
+      });
       return;
     }
 
@@ -279,20 +319,12 @@ function ChatPage() {
     const rec = new SpeechRecognition();
     rec.continuous = false;
     rec.interimResults = false;
-
-    if (currentLanguage === "hi") {
-      rec.lang = "hi-IN";
-    } else if (currentLanguage === "gu") {
-      rec.lang = "gu-IN";
-    } else if (currentLanguage === "mr") {
-      rec.lang = "mr-IN";
-    } else {
-      rec.lang = "en-IN";
-    }
+    rec.lang = lang;
 
     rec.onstart = () => {
       setIsListening(true);
-      toast.info("Listening... Speak now");
+      const langLabel = VOICE_LANGUAGES.find((l) => l.code === lang)?.label ?? lang;
+      toast.info(`Listening in ${langLabel}…`, { description: "Speak now, then pause" });
     };
 
     rec.onresult = (event: any) => {
@@ -301,13 +333,41 @@ function ChatPage() {
         const space = prev && !prev.endsWith(" ") ? " " : "";
         return prev + space + transcript;
       });
-      toast.success("Voice input added!");
+      toast.success("Got it! 🎙️", { description: `"${event.results[0][0].transcript}"` });
     };
 
     rec.onerror = (event: any) => {
-      console.error("Speech recognition error", event);
       setIsListening(false);
-      toast.error("Could not capture speech.");
+      const code: string = event.error ?? "";
+      if (code === "no-speech") {
+        toast("No speech detected", { description: "Tap the mic and speak clearly." });
+      } else if (code === "not-allowed") {
+        setShowMicModal(true);
+      } else if (code === "service-not-allowed") {
+        const isBrave = (navigator as any).brave !== undefined;
+        if (isBrave) {
+          toast.error("Brave Shields block detected", {
+            description: "Please enable 'Speech Recognition' in brave://settings/shields.",
+          });
+        } else {
+          toast.error("Speech service blocked", {
+            description: "Chrome's online speech service is unreachable or blocked.",
+          });
+        }
+      } else if (code === "network") {
+        toast.error("Network error", {
+          description: "Speech recognition requires an active internet connection.",
+        });
+      } else if (code === "audio-capture") {
+        toast.error("No microphone found", {
+          description: "Connect a microphone and try again.",
+        });
+      } else {
+        toast.error(`Voice error: ${code}`, {
+          description: "Try again or switch to typing.",
+        });
+      }
+      console.error("Speech recognition error:", event.error, event);
     };
 
     rec.onend = () => {
@@ -315,8 +375,37 @@ function ChatPage() {
     };
 
     recognitionRef.current = rec;
-    rec.start();
+    try {
+      rec.start();
+    } catch (e: any) {
+      toast.error("Failed to start speech recognition", {
+        description: e.message || "Unknown error",
+      });
+      console.error("Failed to start speech recognition", e);
+    }
   };
+
+  const handleMicClick = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    } else {
+      startListening(voiceLang);
+    }
+  };
+
+  // Sync voiceLang with app language changes
+  useEffect(() => {
+    if (currentLanguage === "hi") {
+      setVoiceLang("hi-IN");
+    } else if (currentLanguage === "gu") {
+      setVoiceLang("gu-IN");
+    } else if (currentLanguage === "mr") {
+      setVoiceLang("mr-IN");
+    } else {
+      setVoiceLang("en-IN");
+    }
+  }, [currentLanguage]);
 
   // Clean up speech synthesis when component unmounts
   useEffect(() => {
@@ -328,8 +417,83 @@ function ChatPage() {
     };
   }, []);
 
+  // Close language picker on outside click
+  useEffect(() => {
+    if (!showLangPicker) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-lang-picker]")) {
+        setShowLangPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showLangPicker]);
+
   return (
     <div className="flex h-dvh flex-col bg-background overflow-hidden">
+      {/* Mic Permission Modal */}
+      {showMicModal && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-3xl border border-border bg-card shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4">
+            {/* Header */}
+            <div className="flex items-start justify-between p-5 pb-3">
+              <div className="flex items-center gap-3">
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-red-500/10 text-red-500">
+                  <MicOff className="h-6 w-6" />
+                </span>
+                <div>
+                  <h2 className="text-base font-black text-foreground">Microphone Blocked</h2>
+                  <p className="text-xs text-muted-foreground font-medium mt-0.5">Permission required for voice input</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMicModal(false)}
+                className="grid h-8 w-8 place-items-center rounded-full hover:bg-muted text-muted-foreground transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {/* Steps */}
+            <div className="px-5 pb-2 space-y-3">
+              <p className="text-sm text-muted-foreground">Your browser has blocked microphone access. Follow these steps to enable it:</p>
+              {[
+                { step: "1", text: "Click the 🔒 lock icon in your browser's address bar" },
+                { step: "2", text: 'Find "Microphone" and change it to "Allow"' },
+                { step: "3", text: "Reload the page and try again" },
+              ].map(({ step, text }) => (
+                <div key={step} className="flex items-start gap-3">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-primary text-xs font-black">{step}</span>
+                  <p className="text-sm text-foreground font-medium leading-snug pt-0.5">{text}</p>
+                </div>
+              ))}
+            </div>
+            {/* Actions */}
+            <div className="flex gap-2 p-5 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowMicModal(false)}
+                className="flex-1 rounded-full border border-border py-2.5 text-sm font-bold text-foreground hover:bg-muted transition-colors"
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMicModal(false);
+                  // Reload triggers re-prompt on some browsers
+                  window.location.reload();
+                }}
+                className="flex-1 flex items-center justify-center gap-2 rounded-full bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-md hover:opacity-90 transition-opacity"
+              >
+                <Settings className="h-4 w-4" />
+                Reload Page
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="shrink-0 border-b border-border/80 bg-card/85 backdrop-blur-md z-20 shadow-xs">
         <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-5 py-3.5">
@@ -355,7 +519,7 @@ function ChatPage() {
       {/* Messages */}
       <div
         ref={scrollRef}
-        className="mx-auto w-full max-w-2xl flex-1 space-y-5 overflow-y-auto px-5 py-5 pb-56 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="mx-auto w-full max-w-2xl flex-1 space-y-5 overflow-y-auto px-5 py-5 pb-64 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {messages.map((m) =>
           m.from === "bot" ? (
@@ -409,7 +573,7 @@ function ChatPage() {
       </div>
 
       {/* Composer */}
-      <div className="fixed inset-x-0 bottom-[64px] z-20 border-t border-border bg-card/85 backdrop-blur-md shadow-xs">
+      <div className="fixed inset-x-0 bottom-[72px] z-20 border-t border-border bg-card/85 backdrop-blur-md shadow-xs">
         <div className="mx-auto w-full max-w-2xl px-5 py-3.5">
           {/* Quick questions */}
           <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -433,19 +597,65 @@ function ChatPage() {
             }}
             className="flex items-center gap-2"
           >
-            <button
-              type="button"
-              onClick={toggleSpeechInput}
-              aria-label="Voice input"
-              className={
-                "grid h-12 w-12 shrink-0 place-items-center rounded-full border border-border transition-all shadow-xs " +
-                (isListening
-                  ? "bg-red-500 border-red-500 text-white animate-pulse shadow-md scale-108"
-                  : "bg-background text-primary hover:border-primary/45 active:bg-muted active:scale-95")
-              }
-            >
-              <Mic className="h-5 w-5" />
-            </button>
+            {/* Mic + Language Picker */}
+            <div className="relative shrink-0 flex items-center gap-1.5" data-lang-picker>
+              {/* Language picker popup */}
+              {showLangPicker && !isListening && (
+                <div className="absolute bottom-14 left-0 z-50 w-44 rounded-2xl border border-border bg-card/95 backdrop-blur-md shadow-xl overflow-hidden animate-in slide-in-from-bottom-2">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">
+                    <Globe className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-[11px] font-black text-muted-foreground uppercase tracking-wider">Pick language</span>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    {VOICE_LANGUAGES.map((lang) => (
+                      <button
+                        key={lang.code}
+                        type="button"
+                        onClick={() => {
+                          setVoiceLang(lang.code);
+                          setShowLangPicker(false);
+                          startListening(lang.code);
+                        }}
+                        className={
+                          "w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors hover:bg-muted " +
+                          (voiceLang === lang.code ? "text-primary font-bold bg-primary/5" : "text-foreground font-medium")
+                        }
+                      >
+                        <span>{lang.label}</span>
+                        {voiceLang === lang.code && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Mic button (Tapping starts/stops recording immediately) */}
+              <button
+                type="button"
+                onClick={handleMicClick}
+                aria-label="Voice input"
+                className={
+                  "grid h-12 w-12 place-items-center rounded-full border border-border transition-all shadow-xs " +
+                  (isListening
+                    ? "bg-red-500 border-red-500 text-white animate-pulse shadow-md scale-105"
+                    : "bg-background text-primary hover:border-primary/45 active:bg-muted active:scale-95")
+                }
+              >
+                <Mic className="h-5 w-5" />
+              </button>
+
+              {/* Language selection pill badge */}
+              {!isListening && (
+                <button
+                  type="button"
+                  onClick={() => setShowLangPicker(!showLangPicker)}
+                  className="flex h-12 px-2.5 items-center justify-center rounded-full border border-border bg-background text-[11px] font-black text-muted-foreground hover:border-primary/45 hover:text-primary active:bg-muted transition-all shadow-2xs gap-0.5"
+                >
+                  <span>{VOICE_LANGUAGES.find((l) => l.code === voiceLang)?.label ?? "English"}</span>
+                  <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                </button>
+              )}
+            </div>
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}

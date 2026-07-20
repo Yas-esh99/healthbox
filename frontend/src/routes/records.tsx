@@ -750,7 +750,7 @@ function RecordsPage() {
                       <button
                         type="button"
                         onClick={() => setOpenId(r.id)}
-                        className="flex-1 flex items-start gap-3 text-left focus:outline-none"
+                        className="flex-1 flex items-start gap-3 text-left focus:outline-none min-w-0"
                       >
                         <span
                           className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${meta.chip}`}
@@ -758,7 +758,7 @@ function RecordsPage() {
                           <meta.Icon className="h-5 w-5" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
+                          <span className="flex items-center gap-2 min-w-0">
                             <span className="truncate text-base font-bold text-foreground">
                               {r.title}
                             </span>

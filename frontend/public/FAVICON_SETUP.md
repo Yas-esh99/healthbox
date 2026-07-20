@@ -5,6 +5,7 @@ The logo has been configured to appear as a favicon in the browser tab. To compl
 ## Add the Favicon Image
 
 1. Save the **healthbox-logo.png** image as:
+
    ```
    frontend/public/healthbox-favicon.png
    ```
@@ -23,7 +24,7 @@ The logo has been configured to appear as a favicon in the browser tab. To compl
 
 ## How It Works
 
-The favicon is configured in [src/routes/__root.tsx](src/routes/__root.tsx):
+The favicon is configured in [src/routes/\_\_root.tsx](src/routes/__root.tsx):
 
 ```tsx
 {

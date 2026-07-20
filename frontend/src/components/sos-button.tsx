@@ -16,12 +16,12 @@ export function SosButton() {
         }, 800);
       }}
       aria-label={t("sos")}
-      className="fixed bottom-24 left-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-destructive text-destructive-foreground shadow-[0_10px_30px_-5px_rgba(239,68,68,0.6)] ring-4 ring-destructive/20 transition active:scale-95"
+      className="fixed bottom-35 left-5 z-40 grid h-12 w-12 place-items-center rounded-full bg-destructive text-destructive-foreground shadow-[0_8px_24px_-4px_rgba(239,68,68,0.55)] ring-4 ring-destructive/20 transition active:scale-95"
     >
       <span className="absolute inset-0 animate-ping rounded-full bg-destructive/40" />
       <span className="relative flex flex-col items-center leading-none">
-        <Siren className="h-6 w-6" />
-        <span className="mt-0.5 text-[10px] font-black tracking-wider">SOS</span>
+        <Siren className="h-5 w-5" />
+        <span className="mt-0.5 text-[9px] font-black tracking-wider">SOS</span>
       </span>
     </button>
   );
