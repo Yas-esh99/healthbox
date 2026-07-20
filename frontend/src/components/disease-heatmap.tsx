@@ -1,8 +1,12 @@
-import { useState, useMemo, useEffect } from "react";
-import { Map as MapIcon, Loader2, Activity, Stethoscope, MapPin } from "lucide-react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
+import { Map as MapIcon, Loader2, Activity, Stethoscope, MapPin, Download } from "lucide-react";
 import { toast } from "sonner";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
 import { HeatmapDataPoint } from "@/lib/api";
+
+const RealHeatmapMap = lazy(() =>
+  import("./real-heatmap-map").then((mod) => ({ default: mod.RealHeatmapMap }))
+);
 
 interface DiseaseHeatmapViewProps {
   data: HeatmapDataPoint[];
@@ -10,17 +14,15 @@ interface DiseaseHeatmapViewProps {
   initialDisease?: string;
 }
 
-// Hotspots representing coordinates for Gujarat districts to render glowing hotspots
-const DISTRICT_COORDS: Record<string, { top: string; left: string }> = {
-  Ahmedabad: { top: "45%", left: "48%" },
-  Gandhinagar: { top: "35%", left: "55%" },
-  Surat: { top: "72%", left: "62%" },
-  Rajkot: { top: "52%", left: "28%" },
-};
-
 export function DiseaseHeatmapView({ data, loading, initialDisease }: DiseaseHeatmapViewProps) {
   const [selectedDistrict, setSelectedDistrict] = useState<string>("All");
   const [selectedDisease, setSelectedDisease] = useState<string>(initialDisease || "All");
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setSelectedDisease(initialDisease || "All");
@@ -47,6 +49,29 @@ export function DiseaseHeatmapView({ data, loading, initialDisease }: DiseaseHea
       return matchDistrict && matchDisease;
     });
   }, [data, selectedDistrict, selectedDisease]);
+
+  // Aggregated data by district for Leaflet real map
+  const districtMapData = useMemo(() => {
+    const map: Record<string, { value: number; topDisease: string; diseaseCounts: Record<string, number> }> = {};
+    filteredData.forEach((x) => {
+      if (!map[x.district]) {
+        map[x.district] = { value: 0, topDisease: "", diseaseCounts: {} };
+      }
+      map[x.district].value += x.cases_count;
+      map[x.district].diseaseCounts[x.disease] =
+        (map[x.district].diseaseCounts[x.disease] || 0) + x.cases_count;
+    });
+
+    return Object.entries(map).map(([name, info]) => {
+      const topDisease =
+        Object.entries(info.diseaseCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Various";
+      return {
+        name,
+        value: info.value,
+        topDisease,
+      };
+    });
+  }, [filteredData]);
 
   // Aggregated data by district for bar chart
   const districtChartData = useMemo(() => {
@@ -139,6 +164,225 @@ export function DiseaseHeatmapView({ data, loading, initialDisease }: DiseaseHea
     return recommendations.sort((a, b) => b.cases - a.cases);
   }, [filteredData]);
 
+  const handleDownloadPDF = async () => {
+    setIsGeneratingPDF(true);
+    const toastId = toast.loading("Generating Heatmap PDF report...");
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const timestamp = new Date().toLocaleString("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+
+      let y = 20;
+
+      // Draw header banner
+      doc.setFillColor(15, 118, 110); // primary teal
+      doc.rect(0, 0, 210, 38, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("HEALTHBOX EPIDEMIOLOGICAL & DISEASE HEATMAP", 15, 16);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`Generated: ${timestamp}`, 15, 24);
+      doc.text(`Filter - District: ${selectedDistrict}  |  Disease: ${selectedDisease}`, 15, 30);
+
+      y = 48;
+
+      // Key Metrics Box
+      doc.setFillColor(241, 245, 249);
+      doc.roundedRect(15, y, 180, 20, 3, 3, "F");
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("SUMMARY METRICS", 20, y + 7);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      const totalCases = filteredData.reduce((acc, curr) => acc + curr.cases_count, 0);
+      doc.text(`Total Recorded Cases: ${totalCases}`, 20, y + 14);
+      doc.text(`Active Hotspot Districts: ${districtChartData.length}`, 85, y + 14);
+      doc.text(`Unique Disease Types: ${diseaseBreakdown.length}`, 145, y + 14);
+
+      y += 28;
+
+      // Section 1: Cases Count by District
+      doc.setTextColor(15, 118, 110);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("1. DISTRICT OUTBREAK DENSITY & CASES", 15, y);
+      y += 6;
+
+      doc.setDrawColor(226, 232, 240);
+      doc.line(15, y, 195, y);
+      y += 6;
+
+      // Table Header
+      doc.setFillColor(226, 232, 240);
+      doc.rect(15, y, 180, 7, "F");
+      doc.setTextColor(51, 65, 85);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text("District Name", 20, y + 5);
+      doc.text("Total Cases", 90, y + 5);
+      doc.text("Severity Level", 145, y + 5);
+
+      y += 7;
+
+      districtChartData.forEach((item, index) => {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        const isHigh = item.value >= 25;
+        const severity = isHigh ? "HIGH OUTBREAK (ALERT)" : "MODERATE";
+
+        if (index % 2 === 1) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(15, y, 180, 7, "F");
+        }
+
+        doc.setTextColor(15, 23, 42);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.text(item.name, 20, y + 5);
+        doc.text(`${item.value} cases`, 90, y + 5);
+
+        if (isHigh) {
+          doc.setTextColor(220, 38, 38);
+          doc.setFont("helvetica", "bold");
+        } else {
+          doc.setTextColor(217, 119, 6);
+          doc.setFont("helvetica", "normal");
+        }
+        doc.text(severity, 145, y + 5);
+
+        y += 7;
+      });
+
+      y += 8;
+
+      // Section 2: Active Disease Breakdown
+      if (y > 230) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.setTextColor(15, 118, 110);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("2. ACTIVE DISEASE CLUSTER BREAKDOWN", 15, y);
+      y += 6;
+
+      doc.setDrawColor(226, 232, 240);
+      doc.line(15, y, 195, y);
+      y += 6;
+
+      diseaseBreakdown.forEach((item) => {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.setTextColor(15, 23, 42);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text(`• ${item.disease}`, 20, y + 4);
+
+        doc.setTextColor(71, 85, 105);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${item.cases} total reported cases`, 110, y + 4);
+
+        y += 7;
+      });
+
+      y += 8;
+
+      // Section 3: AI Camp Recommendations
+      if (y > 220) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.setTextColor(15, 118, 110);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("3. AI HEALTH CAMP INTERVENTION RECOMMENDATIONS", 15, y);
+      y += 6;
+
+      doc.setDrawColor(226, 232, 240);
+      doc.line(15, y, 195, y);
+      y += 6;
+
+      if (placementRecommendations.length === 0) {
+        doc.setTextColor(100, 116, 139);
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(9);
+        doc.text("No high-density disease clusters requiring immediate camp intervention.", 20, y + 4);
+        y += 8;
+      } else {
+        placementRecommendations.forEach((rec) => {
+          if (y > 255) {
+            doc.addPage();
+            y = 20;
+          }
+
+          doc.setFillColor(240, 253, 250);
+          doc.roundedRect(15, y, 180, 16, 2, 2, "F");
+
+          doc.setTextColor(15, 118, 110);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10);
+          doc.text(`[${rec.district}] ${rec.campType}`, 20, y + 6);
+
+          doc.setTextColor(71, 85, 105);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8.5);
+          doc.text(`Target Condition: ${rec.disease}  |  Cluster Density: ${rec.cases} cases`, 20, y + 12);
+
+          y += 19;
+        });
+      }
+
+      // Footer
+      if (y > 260) {
+        doc.addPage();
+        y = 20;
+      }
+      y += 4;
+      doc.setDrawColor(226, 232, 240);
+      doc.line(15, y, 195, y);
+      y += 6;
+
+      doc.setTextColor(148, 163, 184);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.text(
+        "Healthbox Epidemiological Intelligence — Confidential Government & Public Health Analytics Summary.",
+        15,
+        y
+      );
+
+      const fileName = `Healthbox_Heatmap_${selectedDistrict}_${selectedDisease}.pdf`.replace(/\s+/g, "_");
+      doc.save(fileName);
+      toast.success("Heatmap PDF exported successfully!", { id: toastId });
+    } catch (err) {
+      console.error("Heatmap PDF generation failed:", err);
+      toast.error("Failed to generate PDF.", { id: toastId });
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[300px] items-center justify-center">
@@ -148,51 +392,53 @@ export function DiseaseHeatmapView({ data, loading, initialDisease }: DiseaseHea
   }
 
   return (
-    <div className="mt-6 space-y-6">
+    <div className="relative z-0 isolate mt-6 space-y-6">
       {/* Visual Density Map */}
       <section className="rounded-3xl border-2 border-border bg-card p-5">
-        <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-          <MapIcon className="h-5 w-5 text-secondary" /> Dynamic Disease Hotspots Map
-        </h2>
-        <p className="text-xs text-muted-foreground mt-1">
-          Visualizing active disease clusters based on AI diagnostic results to place new camps.
-        </p>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+              <MapIcon className="h-5 w-5 text-secondary" /> HealthBox Disease Hotspots Map
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Visualizing active disease clusters based on AI diagnostic results to place new camps.
+            </p>
+          </div>
 
-        <div className="relative mt-4 h-[240px] w-full overflow-hidden rounded-2xl border border-border bg-muted/30">
-          <div
-            className="absolute inset-0 opacity-20"
-            style={{
-              backgroundImage:
-                "linear-gradient(to right, var(--color-border) 1px, transparent 1px), linear-gradient(to bottom, var(--color-border) 1px, transparent 1px)",
-              backgroundSize: "20px 20px",
-            }}
-          />
+          <button
+            type="button"
+            onClick={handleDownloadPDF}
+            disabled={isGeneratingPDF}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground shadow transition hover:bg-primary/90 active:scale-95 disabled:opacity-50"
+          >
+            {isGeneratingPDF ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="h-3.5 w-3.5" /> Download PDF
+              </>
+            )}
+          </button>
+        </div>
 
-          {/* Render real-time active spots */}
-          {districtChartData.map((d) => {
-            const coords = DISTRICT_COORDS[d.name] || { top: "50%", left: "50%" };
-            const isHigh = d.value >= 25;
-            const glowColor = isHigh ? "bg-destructive/30" : "bg-warning/30";
-            const pointColor = isHigh ? "bg-destructive" : "bg-warning";
-
-            return (
-              <div
-                key={d.name}
-                className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center animate-fade-in"
-                style={{ top: coords.top, left: coords.left }}
-              >
-                <span className={`absolute -inset-4 animate-ping rounded-full ${glowColor}`} />
-                <span
-                  className={`relative grid h-8 w-8 place-items-center rounded-full text-[10px] font-black text-white shadow-md ${pointColor}`}
-                >
-                  {d.value}
-                </span>
-                <span className="mt-1 block rounded bg-card/95 border border-border px-1.5 py-0.5 text-[9px] font-bold text-foreground shadow-sm whitespace-nowrap">
-                  {d.name}
-                </span>
-              </div>
-            );
-          })}
+        <div className="relative z-0 isolate mt-4 h-[300px] w-full overflow-hidden rounded-2xl border border-border bg-muted/30">
+          {mounted ? (
+            <Suspense
+              fallback={
+                <div className="h-full w-full flex items-center justify-center text-xs font-semibold text-muted-foreground">
+                  Loading map components...
+                </div>
+              }
+            >
+              <RealHeatmapMap data={districtMapData} />
+            </Suspense>
+          ) : (
+            <div className="h-full w-full flex items-center justify-center text-xs font-semibold text-muted-foreground">
+              Loading map...
+            </div>
+          )}
         </div>
       </section>
 
@@ -261,6 +507,7 @@ export function DiseaseHeatmapView({ data, loading, initialDisease }: DiseaseHea
                   width={80}
                 />
                 <Tooltip
+                  wrapperStyle={{ zIndex: 20 }}
                   cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
                   contentStyle={{
                     background: "hsl(var(--card))",
@@ -355,3 +602,4 @@ export function DiseaseHeatmapView({ data, loading, initialDisease }: DiseaseHea
     </div>
   );
 }
+

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import {
   MapPin,
   Map as MapIcon,
@@ -25,6 +25,10 @@ import { SosButton } from "@/components/sos-button";
 import { apiFetch, HeatmapDataPoint } from "@/lib/api";
 import { DiseaseHeatmapView } from "@/components/disease-heatmap";
 
+const RealCampsMap = lazy(() =>
+  import("@/components/real-camps-map").then((mod) => ({ default: mod.RealCampsMap }))
+);
+
 export const Route = createFileRoute("/camps")({
   head: () => ({ meta: [{ title: "Government Hospitals & Camps" }] }),
   component: CampsPage,
@@ -39,18 +43,24 @@ const CAMPS = [
     org: "Lions Club",
     date: "Sat, 14 Jun · 9 AM",
     distance: "1.2 km away",
+    lat: 23.03,
+    lng: 72.58,
   },
   {
     name: "Diabetes & BP Screening",
     org: "City Health Dept.",
     date: "Sun, 15 Jun · 10 AM",
     distance: "3.6 km away",
+    lat: 23.01,
+    lng: 72.55,
   },
   {
     name: "Child Vaccination Drive",
     org: "Govt. Primary Center",
     date: "Wed, 18 Jun · 8 AM",
     distance: "4.1 km away",
+    lat: 23.05,
+    lng: 72.6,
   },
 ];
 
@@ -89,6 +99,8 @@ const HOSPITALS = [
     status: "24/7 Emergency Wing Active | Beds Available",
     address: "Plot 14, Ring Road, Sector 9, Ahmedabad — 380015",
     desk: "Registration Desk: Block A, Ground Floor · +91 79 4000 1200",
+    lat: 23.04,
+    lng: 72.53,
   },
   {
     name: "District Government General Hospital",
@@ -97,6 +109,8 @@ const HOSPITALS = [
     status: "24/7 Casualty Active | Limited ICU Beds",
     address: "Civil Lines, Main Road, District Health Complex — 380001",
     desk: "Registration Desk: OPD Counter 3 · +91 79 2550 8800",
+    lat: 23.02,
+    lng: 72.59,
   },
 ];
 
@@ -162,7 +176,7 @@ function CampsPage() {
   return (
     <div className="min-h-dvh bg-background pb-28">
       {/* Sticky top utility bar */}
-      <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+      <div className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-md items-center gap-2 px-4 py-3">
           <button
             type="button"
@@ -309,33 +323,29 @@ function ToggleButton({
 }
 
 function MapView() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <div className="relative mt-6 h-[420px] w-full overflow-hidden rounded-3xl border-2 border-border bg-muted">
-      <div
-        className="absolute inset-0 opacity-40"
-        style={{
-          backgroundImage:
-            "linear-gradient(to right, var(--color-border) 1px, transparent 1px), linear-gradient(to bottom, var(--color-border) 1px, transparent 1px)",
-          backgroundSize: "30px 30px",
-        }}
-      />
-      {[
-        { top: "30%", left: "35%" },
-        { top: "55%", left: "60%" },
-        { top: "70%", left: "28%" },
-      ].map((p, i) => (
-        <span
-          key={i}
-          className="absolute -translate-x-1/2 -translate-y-1/2"
-          style={{ top: p.top, left: p.left }}
+      {mounted ? (
+        <Suspense
+          fallback={
+            <div className="h-full w-full flex items-center justify-center text-xs font-semibold text-muted-foreground">
+              Loading map components...
+            </div>
+          }
         >
-          <span className="absolute -inset-3 animate-ping rounded-full bg-secondary/20" />
-          <span className="relative grid h-10 w-10 place-items-center rounded-full bg-secondary text-secondary-foreground shadow-lg">
-            <Stethoscope className="h-5 w-5" strokeWidth={2.5} />
-          </span>
-        </span>
-      ))}
-      <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-card/90 px-3 py-1.5 text-xs font-bold text-foreground shadow backdrop-blur">
+          <RealCampsMap camps={CAMPS} hospitals={HOSPITALS} />
+        </Suspense>
+      ) : (
+        <div className="h-full w-full flex items-center justify-center text-xs font-semibold text-muted-foreground">
+          Loading map...
+        </div>
+      )}
+      <div className="absolute bottom-3 left-3 z-[1000] flex items-center gap-1.5 rounded-full bg-card/90 px-3 py-1.5 text-xs font-bold text-foreground shadow backdrop-blur border border-border">
         <Navigation className="h-3.5 w-3.5 text-secondary" />
         {CAMPS.length} camps near you
       </div>

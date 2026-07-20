@@ -12,7 +12,7 @@ const items = [
 export function BottomNav() {
   const { t } = useTranslation();
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.08)]">
+    <nav className="fixed inset-x-0 bottom-0 z-[100] border-t border-border bg-card pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.08)]">
       <ul className="mx-auto grid max-w-md grid-cols-4">
         {items.map(({ to, translationKey, icon: Icon }) => (
           <li key={to}>
