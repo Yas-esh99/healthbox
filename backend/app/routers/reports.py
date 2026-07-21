@@ -1,7 +1,7 @@
 import time
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, File, UploadFile, HTTPException, Request, status
+from fastapi import APIRouter, File, UploadFile, HTTPException, Request, status, Depends
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
@@ -9,6 +9,7 @@ from google.genai import errors
 
 from app.config import get_settings
 from app.services.care_matching import enrich_diagnosis
+from app.routers.records import get_current_phone
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,8 @@ class GeminiAnalysisResult(BaseModel):
 @router.post("/analyze")
 async def analyze_report(
     request: Request,
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    phone_number: str = Depends(get_current_phone)
 ):
     # 1. Client-side file checks (size and type)
     content = await file.read()
@@ -183,7 +185,8 @@ class EnrichRequest(BaseModel):
 @router.post("/enrich")
 async def enrich_report_diagnosis(
     payload: EnrichRequest,
-    request: Request
+    request: Request,
+    phone_number: str = Depends(get_current_phone)
 ):
     settings = get_settings()
     enrichment = enrich_diagnosis(

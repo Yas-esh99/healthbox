@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -166,17 +167,58 @@ interface SpeechRecognitionInstance {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 
+interface SavedSymptomsState {
+  gender: "male" | "female" | null;
+  age: string;
+  temp: string;
+  heartRate: string;
+  spo2: string;
+  bp: string;
+  conditions: string[];
+  medications: string;
+  allergies: string;
+  habits: string[];
+  travel: string;
+  water: string;
+  onset: string;
+  location: string;
+  quality: string;
+  aggravating: string;
+  flags: string[];
+  severity: number[];
+  transcript: string;
+  photoBase64: string | null;
+  reportBase64: string | null;
+  touched: Record<string, boolean>;
+  speechLang: string;
+}
+
+let savedSymptomsState: SavedSymptomsState | null = null;
+
 function SymptomsPage() {
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
-  const [gender, setGender] = useState<"male" | "female" | null>(null);
-  const [age, setAge] = useState("");
-  const [temp, setTemp] = useState("");
-  const [heartRate, setHeartRate] = useState("");
-  const [spo2, setSpo2] = useState("");
-  const [bp, setBp] = useState("");
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate({ to: "/login" });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
 
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [gender, setGender] = useState<"male" | "female" | null>(
+    savedSymptomsState ? savedSymptomsState.gender : null,
+  );
+  const [age, setAge] = useState(savedSymptomsState ? savedSymptomsState.age : "");
+  const [temp, setTemp] = useState(savedSymptomsState ? savedSymptomsState.temp : "");
+  const [heartRate, setHeartRate] = useState(
+    savedSymptomsState ? savedSymptomsState.heartRate : "",
+  );
+  const [spo2, setSpo2] = useState(savedSymptomsState ? savedSymptomsState.spo2 : "");
+  const [bp, setBp] = useState(savedSymptomsState ? savedSymptomsState.bp : "");
+
+  const [touched, setTouched] = useState<Record<string, boolean>>(
+    savedSymptomsState ? savedSymptomsState.touched : {},
+  );
 
   const formValues = {
     age,
@@ -237,36 +279,107 @@ function SymptomsPage() {
     }
   };
 
-  const [conditions, setConditions] = useState<string[]>([]);
-  const [medications, setMedications] = useState("");
-  const [allergies, setAllergies] = useState("");
+  const [conditions, setConditions] = useState<string[]>(
+    savedSymptomsState ? savedSymptomsState.conditions : [],
+  );
+  const [medications, setMedications] = useState(
+    savedSymptomsState ? savedSymptomsState.medications : "",
+  );
+  const [allergies, setAllergies] = useState(
+    savedSymptomsState ? savedSymptomsState.allergies : "",
+  );
 
-  const [habits, setHabits] = useState<string[]>([]);
-  const [travel, setTravel] = useState("");
-  const [water, setWater] = useState("");
+  const [habits, setHabits] = useState<string[]>(
+    savedSymptomsState ? savedSymptomsState.habits : [],
+  );
+  const [travel, setTravel] = useState(savedSymptomsState ? savedSymptomsState.travel : "");
+  const [water, setWater] = useState(savedSymptomsState ? savedSymptomsState.water : "");
 
-  const [onset, setOnset] = useState("");
-  const [location, setLocation] = useState("");
-  const [quality, setQuality] = useState("");
-  const [aggravating, setAggravating] = useState("");
+  const [onset, setOnset] = useState(savedSymptomsState ? savedSymptomsState.onset : "");
+  const [location, setLocation] = useState(savedSymptomsState ? savedSymptomsState.location : "");
+  const [quality, setQuality] = useState(savedSymptomsState ? savedSymptomsState.quality : "");
+  const [aggravating, setAggravating] = useState(
+    savedSymptomsState ? savedSymptomsState.aggravating : "",
+  );
 
-  const [flags, setFlags] = useState<string[]>([]);
-  const [severity, setSeverity] = useState([5]);
-   const [transcript, setTranscript] = useState("");
+  const [flags, setFlags] = useState<string[]>(savedSymptomsState ? savedSymptomsState.flags : []);
+  const [severity, setSeverity] = useState(savedSymptomsState ? savedSymptomsState.severity : [5]);
+  const [transcript, setTranscript] = useState(
+    savedSymptomsState ? savedSymptomsState.transcript : "",
+  );
   const [listening, setListening] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
-  const [speechLang, setSpeechLang] = useState("en-IN");
+  const [speechLang, setSpeechLang] = useState(
+    savedSymptomsState ? savedSymptomsState.speechLang : "en-IN",
+  );
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [speechStatus, setSpeechStatus] = useState<string>("");
 
-  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
-  const [reportBase64, setReportBase64] = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(
+    savedSymptomsState ? savedSymptomsState.photoBase64 : null,
+  );
+  const [reportBase64, setReportBase64] = useState<string | null>(
+    savedSymptomsState ? savedSymptomsState.reportBase64 : null,
+  );
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [isRecordingFallback, setIsRecordingFallback] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+
+  // Save intake fields dynamically to cache
+  useEffect(() => {
+    savedSymptomsState = {
+      gender,
+      age,
+      temp,
+      heartRate,
+      spo2,
+      bp,
+      conditions,
+      medications,
+      allergies,
+      habits,
+      travel,
+      water,
+      onset,
+      location,
+      quality,
+      aggravating,
+      flags,
+      severity,
+      transcript,
+      photoBase64,
+      reportBase64,
+      touched,
+      speechLang,
+    };
+  }, [
+    gender,
+    age,
+    temp,
+    heartRate,
+    spo2,
+    bp,
+    conditions,
+    medications,
+    allergies,
+    habits,
+    travel,
+    water,
+    onset,
+    location,
+    quality,
+    aggravating,
+    flags,
+    severity,
+    transcript,
+    photoBase64,
+    reportBase64,
+    touched,
+    speechLang,
+  ]);
 
   // Check speech support on mount and handle cleanup
   useEffect(() => {
@@ -280,7 +393,11 @@ function SymptomsPage() {
       ).SpeechRecognition ||
         !!(window as Window & { webkitSpeechRecognition?: SpeechRecognitionConstructor })
           .webkitSpeechRecognition ||
-        !!(window.navigator && window.navigator.mediaDevices && window.navigator.mediaDevices.getUserMedia));
+        !!(
+          window.navigator &&
+          window.navigator.mediaDevices &&
+          window.navigator.mediaDevices.getUserMedia
+        ));
     setSpeechSupported(isSupported);
 
     return () => {
@@ -292,6 +409,18 @@ function SymptomsPage() {
       }
     };
   }, []);
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const toggle = (value: string, list: string[], setList: (v: string[]) => void) => {
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
@@ -333,18 +462,24 @@ function SymptomsPage() {
           });
 
           if (res.transcript) {
-            setTranscript((prev) => (prev ? prev.trim() + " " + res.transcript.trim() : res.transcript.trim()));
+            setTranscript((prev) =>
+              prev ? prev.trim() + " " + res.transcript.trim() : res.transcript.trim(),
+            );
             setSpeechStatus("Recognition completed");
             toast.success("Got it! 🎙️", { description: `"${res.transcript}"` });
           } else {
             setSpeechStatus("No speech detected");
-            toast.warning("No speech detected", { description: "Please speak clearly and try again." });
+            toast.warning("No speech detected", {
+              description: "Please speak clearly and try again.",
+            });
           }
         } catch (err: any) {
           console.error("Transcription error:", err);
           setSpeechStatus("Transcription failed");
           setSpeechError(err.message || "Unknown error during transcription.");
-          toast.error("Failed to transcribe voice", { description: err.message || "Unknown error" });
+          toast.error("Failed to transcribe voice", {
+            description: err.message || "Unknown error",
+          });
         } finally {
           setIsRecordingFallback(false);
           setListening(false);
@@ -359,7 +494,9 @@ function SymptomsPage() {
     } catch (err: any) {
       console.error("Failed to start backup recorder:", err);
       setSpeechError("Microphone access failed. Please grant permission.");
-      toast.error("Microphone access failed", { description: "Please allow microphone access to use voice input." });
+      toast.error("Microphone access failed", {
+        description: "Please allow microphone access to use voice input.",
+      });
       setIsRecordingFallback(false);
       setListening(false);
     }
@@ -407,7 +544,8 @@ function SymptomsPage() {
       window.location.hostname !== "127.0.0.1"
     ) {
       toast.warning("Insecure Context", {
-        description: "Voice input may be blocked by your browser on insecure HTTP connections. Please use localhost or HTTPS if it fails.",
+        description:
+          "Voice input may be blocked by your browser on insecure HTTP connections. Please use localhost or HTTPS if it fails.",
       });
     }
 
@@ -548,6 +686,36 @@ function SymptomsPage() {
         },
       };
 
+      try {
+        localStorage.setItem("healthbox_last_intake_payload", JSON.stringify(payload));
+      } catch (storageErr) {
+        console.warn("Failed to write to localStorage:", storageErr);
+      }
+
+      const filledCount =
+        [
+          temp,
+          heartRate,
+          spo2,
+          bp,
+          medications,
+          allergies,
+          travel,
+          water,
+          onset,
+          location,
+          quality,
+          aggravating,
+          transcript,
+          photoBase64,
+          reportBase64,
+        ].filter((v) => Boolean(v && v !== "None" && v !== "Unknown")).length +
+        (conditions.length > 0 ? 1 : 0) +
+        (habits.length > 0 ? 1 : 0) +
+        (flags.length > 0 ? 1 : 0);
+
+      const computedUnknownCase = filledCount < 3 ? "insufficient_inputs" : "model_inconclusive";
+
       let report: any;
       try {
         const response = await fetch(
@@ -569,19 +737,28 @@ function SymptomsPage() {
         console.warn("Using fallback mock report because external service is offline:", err);
         toast.warning("AI Diagnostic service offline. Using offline matching fallback.");
         report = {
-          report_id: "HB-2026-MOCK",
-          emergency_level: "moderate",
-          primary_diagnosis: "Asthma & COPD",
-          confidence_percentage: "92%",
-          condition_stage: "Acute",
-          clinical_evidence: ["Symptom onset today", "Coughing & shortness of breath"],
-          approved_protocols: ["Sit upright", "Use rescue inhaler as prescribed"],
-          contraindicated_actions: [
-            "Avoid smoking or dust exposure",
-            "Do not engage in heavy exercise",
-          ],
-          precautions: ["Seek emergency care if breathing does not improve within 15 minutes"],
+          report_id: "HB-2026-OFFLINE",
+          emergency_level: "low",
+          primary_diagnosis: "No Diagnosis Available (Service Offline)",
+          confidence_percentage: "0%",
+          condition_stage: "Not Applicable",
+          clinical_evidence: ["AI engine currently unreachable"],
+          approved_protocols: ["Re-verify internet connection and retry"],
+          contraindicated_actions: ["Do not rely on offline state for critical triage"],
+          precautions: ["Seek immediate emergency care if experiencing acute severe symptoms"],
+          unknown_reason_case: computedUnknownCase,
         };
+      }
+
+      const diagStr = (report.primary_diagnosis || "").toLowerCase();
+      if (
+        !report.unknown_reason_case &&
+        (diagStr.includes("no diagnosis") ||
+          diagStr.includes("unknown") ||
+          diagStr.includes("unspecified") ||
+          diagStr.includes("inconsistent"))
+      ) {
+        report.unknown_reason_case = computedUnknownCase;
       }
 
       console.log("Prediction report:", report);

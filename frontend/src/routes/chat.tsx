@@ -1,11 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Send, Volume2, Bot, Mic, Globe, MicOff, X, Settings, ChevronDown } from "lucide-react";
+import { Send, Volume2, Bot, Mic, Globe, MicOff, X, Settings, ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { BottomNav } from "@/components/bottom-nav";
 import { SosButton } from "@/components/sos-button";
 import { apiFetch } from "@/lib/api";
 import { useTranslation } from "@/lib/language";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/chat")({
   head: () => ({ meta: [{ title: "Health Assistant" }] }),
@@ -182,6 +183,15 @@ let idSeq = 2;
 
 function ChatPage() {
   const { t, currentLanguage } = useTranslation();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate({ to: "/login" });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
   const [messages, setMessages] = useState<Msg[]>([
     {
       id: 1,
@@ -201,6 +211,18 @@ function ChatPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
     if (scrollRef.current) {

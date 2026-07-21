@@ -18,12 +18,14 @@ import {
   BadgeCheck,
   Tent,
   Landmark,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BottomNav } from "@/components/bottom-nav";
 import { SosButton } from "@/components/sos-button";
 import { apiFetch, HeatmapDataPoint } from "@/lib/api";
 import { DiseaseHeatmapView } from "@/components/disease-heatmap";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/camps")({
   head: () => ({ meta: [{ title: "Government Hospitals & Camps" }] }),
@@ -35,7 +37,7 @@ type View = "map" | "list";
 
 const RealCampsMap = lazy(() => {
   if (typeof window === "undefined") {
-    return Promise.resolve({ default: () => null });
+    return Promise.resolve({ default: (props: any) => null as any });
   }
   return import("../components/real-camps-map").then((m) => ({ default: m.RealCampsMap }));
 });
@@ -119,11 +121,30 @@ const HOSPITALS = [
 
 function CampsPage() {
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [tab, setTab] = useState<Tab>("camps");
   const [view, setView] = useState<View>("list");
 
   const [heatmapData, setHeatmapData] = useState<HeatmapDataPoint[]>([]);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate({ to: "/login" });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   useEffect(() => {
     if (tab === "analytics") {
@@ -183,11 +204,11 @@ function CampsPage() {
         <div className="mx-auto flex w-full max-w-md items-center gap-2 px-4 py-3">
           <button
             type="button"
-            onClick={() => navigate({ to: "/triage-results" })}
+            onClick={() => navigate({ to: "/home" })}
             className="-ml-1 flex items-center gap-1 rounded-xl px-2 py-1.5 text-sm font-bold text-foreground active:bg-muted"
           >
             <ChevronLeft className="h-5 w-5" strokeWidth={2.5} />
-            Return to Report Overview
+            Back to Home
           </button>
         </div>
       </div>

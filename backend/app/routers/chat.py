@@ -2,13 +2,14 @@ import os
 import time
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Request, File, UploadFile
+from fastapi import APIRouter, HTTPException, Request, File, UploadFile, Depends
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
 
 from app.config import get_settings
 from app.services.auth import decode_token
+from app.routers.records import get_current_phone
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,11 @@ Your duties:
 """
 
 @router.post("", response_model=ChatResponse)
-async def chat_endpoint(payload: ChatRequest, request: Request):
+async def chat_endpoint(
+    payload: ChatRequest,
+    request: Request,
+    phone_number: str = Depends(get_current_phone)
+):
     start_time = time.time()
     settings = get_settings()
     api_key = settings.gemini_api_key
@@ -51,28 +56,25 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
     client = genai.Client(api_key=api_key)
     
     # 1. Fetch user details if logged in for personalization
-    session_token = request.cookies.get(settings.auth_cookie_name)
     user_context = ""
-    if session_token:
-        try:
-            phone_number = decode_token(session_token, expected_type="session")
-            user_repo = request.app.state.user_repository
-            user = user_repo.get_by_phone(phone_number)
-            if user:
-                user_context = (
-                    f"\n\nCURRENT USER CONTEXT:\n"
-                    f"- Name: {user.name or user.full_name or 'User'}\n"
-                    f"- Location: {user.city or user.district or 'Unknown'}, {user.state or 'Unknown'}\n"
-                    f"- Age: {user.age}\n"
-                    f"- Gender: {user.gender or 'Unknown'}\n"
-                    f"- Ayushman Card: {'Yes' if user.has_aayushman_card or user.has_ayushman else 'No'}"
-                )
-                if user.aayushman_card_number or user.ayushman_card_number:
-                    user_context += f" (Card Number: {user.aayushman_card_number or user.ayushman_card_number})"
-                if user.conditions:
-                    user_context += f"\n- Chronic Conditions: {', '.join(user.conditions)}"
-        except Exception as e:
-            logger.error(f"Error fetching user profile context for chat: {e}")
+    try:
+        user_repo = request.app.state.user_repository
+        user = user_repo.get_by_phone(phone_number)
+        if user:
+            user_context = (
+                f"\n\nCURRENT USER CONTEXT:\n"
+                f"- Name: {user.name or user.full_name or 'User'}\n"
+                f"- Location: {user.city or user.district or 'Unknown'}, {user.state or 'Unknown'}\n"
+                f"- Age: {user.age}\n"
+                f"- Gender: {user.gender or 'Unknown'}\n"
+                f"- Ayushman Card: {'Yes' if user.has_aayushman_card or user.has_ayushman else 'No'}"
+            )
+            if user.aayushman_card_number or user.ayushman_card_number:
+                user_context += f" (Card Number: {user.aayushman_card_number or user.ayushman_card_number})"
+            if user.conditions:
+                user_context += f"\n- Chronic Conditions: {', '.join(user.conditions)}"
+    except Exception as e:
+        logger.error(f"Error fetching user profile context for chat: {e}")
 
     personalized_prompt = SYSTEM_PROMPT + user_context
 
@@ -259,7 +261,8 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
 @router.post("/transcribe")
 async def transcribe_endpoint(
     request: Request,
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    phone_number: str = Depends(get_current_phone)
 ):
     content = await file.read()
     settings = get_settings()

@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -22,6 +23,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { SosButton } from "@/components/sos-button";
 import { fetchPharmacies, Pharmacy } from "@/lib/api";
 import { useTranslation } from "@/lib/language";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/pharmacies")({
   head: () => ({ meta: [{ title: "Nearby Pharmacies" }] }),
@@ -31,6 +33,14 @@ export const Route = createFileRoute("/pharmacies")({
 function PharmaciesPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate({ to: "/login" });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
   const {
     data: pharmacies = [],
     isLoading,
@@ -39,6 +49,18 @@ function PharmaciesPage() {
     queryKey: ["pharmacies"],
     queryFn: fetchPharmacies,
   });
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-dvh bg-background pb-28">

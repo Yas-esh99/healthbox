@@ -6,7 +6,7 @@ import { HeatmapDataPoint } from "@/lib/api";
 
 const RealHeatmapMap = lazy(() => {
   if (typeof window === "undefined") {
-    return Promise.resolve({ default: () => null });
+    return Promise.resolve({ default: (props: any) => null as any });
   }
   return import("./real-heatmap-map").then((mod) => ({ default: mod.RealHeatmapMap }));
 });

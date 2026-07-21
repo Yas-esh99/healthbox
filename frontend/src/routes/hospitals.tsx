@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -25,6 +25,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { SosButton } from "@/components/sos-button";
 import { fetchHospitals, Hospital } from "@/lib/api";
 import { useTranslation } from "@/lib/language";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/hospitals")({
   head: () => ({ meta: [{ title: "Nearby Hospitals" }] }),
@@ -34,6 +35,14 @@ export const Route = createFileRoute("/hospitals")({
 function HospitalsPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate({ to: "/login" });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
   const {
     data: hospitals = [],
     isLoading,
@@ -42,6 +51,18 @@ function HospitalsPage() {
     queryKey: ["hospitals"],
     queryFn: fetchHospitals,
   });
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-dvh bg-background pb-28">

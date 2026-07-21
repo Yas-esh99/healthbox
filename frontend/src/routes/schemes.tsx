@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
   Upload,
   Sparkles,
@@ -16,6 +16,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { SosButton } from "@/components/sos-button";
 import { fetchSchemes, Scheme } from "@/lib/api";
 import { useTranslation } from "@/lib/language";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/schemes")({
   head: () => ({ meta: [{ title: "Government Schemes" }] }),
@@ -23,9 +24,18 @@ export const Route = createFileRoute("/schemes")({
 });
 
 function SchemesPage() {
+  const navigate = useNavigate();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [scanned, setScanned] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const { t } = useTranslation();
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate({ to: "/login" });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
   const {
     data: schemes = [],
     isLoading,
@@ -34,6 +44,18 @@ function SchemesPage() {
     queryKey: ["schemes"],
     queryFn: fetchSchemes,
   });
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const runScan = () => {
     toast("Reading Ayushman Card...", { description: "Processing document details" });

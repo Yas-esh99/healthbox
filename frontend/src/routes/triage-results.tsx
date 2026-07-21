@@ -18,10 +18,12 @@ import {
   Phone,
   Navigation,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { DiseaseHeatmapView } from "@/components/disease-heatmap";
 import { apiFetch, HeatmapDataPoint, Hospital as HospitalData, Scheme } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/triage-results")({
   head: () => ({ meta: [{ title: "Clinical Summary Report" }] }),
@@ -40,10 +42,17 @@ const RISK_CONFIG: Record<RiskTier, { label: string; block: string }> = {
 function TriageResultsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate({ to: "/login" });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
   const [isGenerating, setIsGenerating] = useState(false);
 
   // @ts-expect-error location.state is typed as unknown
-  const report = location.state?.report || {
+  const [report, setReport] = useState<any>(location.state?.report || {
     report_id: "HB-2026-9941",
     emergency_level: "moderate",
     primary_diagnosis: "Viral Pharyngitis",
@@ -72,6 +81,81 @@ function TriageResultsPage() {
       "Continue home care with rest and fluids; monitor appetite.",
       "Consult a physical physician if symptoms fail to resolve within 48 hours.",
     ],
+  });
+
+  const [retrying, setRetrying] = useState(false);
+
+  const handleRetryAI = async () => {
+    const savedPayloadStr = localStorage.getItem("healthbox_last_intake_payload");
+    if (!savedPayloadStr) {
+      toast.error("No saved intake data found to resend.");
+      return;
+    }
+
+    setRetrying(true);
+    const toastId = toast.loading("Resending diagnostic intake to MedGemma...");
+    try {
+      const response = await fetch(
+        "https://unviable-reps-grandkid.ngrok-free.dev/predict_with_report",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: savedPayloadStr,
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to get diagnosis from MedGemma server.");
+      }
+
+      const newReport = await response.json();
+      toast.success("AI Triage Completed Successfully!", { id: toastId });
+
+      // Run enrichment for schemes, hospitals, heatmap
+      try {
+        const enrichment = await apiFetch<any>("/reports/enrich", {
+          method: "POST",
+          body: JSON.stringify({ primary_diagnosis: newReport.primary_diagnosis }),
+        });
+        newReport.condition_category = enrichment.condition_category;
+        newReport.matched_schemes = enrichment.matched_schemes;
+        newReport.nearest_hospitals = enrichment.nearest_hospitals;
+        newReport.disease_heatmap = enrichment.disease_heatmap;
+
+        setNearestHospitals(enrichment.nearest_hospitals || []);
+        setMatchedSchemes(enrichment.matched_schemes || []);
+        setHeatmapData(enrichment.disease_heatmap || []);
+      } catch (enrichErr) {
+        console.error("Failed to enrich diagnosis report:", enrichErr);
+      }
+
+      // Save report in local database records
+      try {
+        const payloadObj = JSON.parse(savedPayloadStr);
+        const onset = payloadObj?.symptom_chronology?.onset;
+        const locationStr = payloadObj?.symptom_chronology?.location;
+        const transcriptText = payloadObj?.free_form_transcript;
+
+        await apiFetch("/records", {
+          method: "POST",
+          body: JSON.stringify({
+            report: newReport,
+            chief_complaint: onset
+              ? `${onset}${locationStr ? ` (Location: ${locationStr})` : ""}`
+              : transcriptText || "AI Diagnostic Triage",
+          }),
+        });
+      } catch (err) {
+        console.error("Failed to save report to database", err);
+      }
+
+      setReport(newReport);
+    } catch (err: any) {
+      console.error("Retry failed:", err);
+      toast.error("Retry failed: MedGemma server is still unreachable.", { id: toastId });
+    } finally {
+      setRetrying(false);
+    }
   };
 
   const [nearestHospitals, setNearestHospitals] = useState<HospitalData[]>(
@@ -135,8 +219,31 @@ function TriageResultsPage() {
     report.primary_diagnosis,
   ]);
 
+  if (authLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
   const govtHospitals = nearestHospitals.filter((h: HospitalData) => h.is_govt);
   const privateHospitals = nearestHospitals.filter((h: HospitalData) => !h.is_govt);
+
+  const diagLower = (report.primary_diagnosis || "").toLowerCase();
+  const isUnknownResult =
+    !report.primary_diagnosis ||
+    diagLower.includes("no diagnosis available") ||
+    diagLower.includes("unknown") ||
+    diagLower.includes("unspecified") ||
+    diagLower.includes("inconsistent report") ||
+    report.confidence_percentage === "0%";
+
+  const unknownReasonCase = report.unknown_reason_case || "insufficient_inputs";
 
   const risk = (report.emergency_level?.toLowerCase() || "moderate") as RiskTier;
   const cfg = RISK_CONFIG[risk] || RISK_CONFIG.moderate;
@@ -416,6 +523,66 @@ function TriageResultsPage() {
             <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-sm font-bold text-foreground">
               Condition Stage: {report.condition_stage}
             </div>
+
+            {/* UNKNOWN DIAGNOSIS CASE ANALYSIS */}
+            {isUnknownResult && (
+              <div className="mt-5 rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-4 text-left">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-extrabold text-sm uppercase tracking-wide">
+                  <span>Diagnostic Analysis</span>
+                </div>
+                {unknownReasonCase === "insufficient_inputs" ? (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-sm font-extrabold text-foreground">
+                      Case 1: Insufficient Clinical Intake Data (Few Fields Entered)
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      You provided only a few clinical fields during intake. MedGemma AI requires at least 3 active clinical data points (such as body temperature, heart rate, SpO2, or detailed symptom voice notes) to correlate symptoms with a specific condition.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => navigate({ to: "/symptoms" })}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground shadow"
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" /> Return to Intake &amp; Add Vitals
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-sm font-extrabold text-foreground">
+                      Case 2: Diagnostic Uncertainty (AI Model Inconclusive)
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Intake data was processed, but the AI engine could not correlate your reported symptoms with a single definitive condition with confidence. Please consult a qualified healthcare professional for a formal clinical evaluation.
+                    </p>
+                  </div>
+                )}
+
+                {/* Resend/Retry Button if diagnostic fallback was triggered */}
+                {report.primary_diagnosis.toLowerCase().includes("offline") && (
+                  <div className="mt-3 border-t border-dashed border-amber-500/30 pt-3">
+                    <button
+                      type="button"
+                      disabled={retrying}
+                      onClick={handleRetryAI}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-secondary py-2.5 px-4 text-xs font-black text-secondary-foreground shadow active:scale-[0.99] disabled:opacity-50"
+                    >
+                      {retrying ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Resending...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Resend Diagnostic Intake (Retry)
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <p className="mt-4 text-xs font-bold text-destructive flex items-center gap-1.5">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive shrink-0 animate-pulse" />
               This AI-generated analysis is not a substitute for professional medical advice.
@@ -509,90 +676,92 @@ function TriageResultsPage() {
           diagnostic evaluation or clinical treatment from a certified healthcare professional.
         </p>
 
-        {/* 7. CARE NAVIGATION ACTIONS */}
-        <section className="mt-7 space-y-8">
-          <div>
-            <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
-              <Hospital className="h-5 w-5 text-primary" strokeWidth={2.5} /> Government Hospitals
-            </h3>
-            {govtHospitals.length > 0 ? (
-              <div className="space-y-3">
-                {govtHospitals.map((h: HospitalData, idx: number) => (
-                  <HospitalCardDynamic key={idx} hospital={h} />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
-                <p className="text-sm font-semibold text-muted-foreground">
-                  No government hospitals found nearby for this condition.
-                </p>
-              </div>
-            )}
-          </div>
+        {/* 7. CARE NAVIGATION ACTIONS — HIDDEN WHEN RESULT IS UNKNOWN OR UNSPECIFIED */}
+        {!isUnknownResult && (
+          <section className="mt-7 space-y-8">
+            <div>
+              <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
+                <Hospital className="h-5 w-5 text-primary" strokeWidth={2.5} /> Government Hospitals
+              </h3>
+              {govtHospitals.length > 0 ? (
+                <div className="space-y-3">
+                  {govtHospitals.map((h: HospitalData, idx: number) => (
+                    <HospitalCardDynamic key={idx} hospital={h} />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
+                  <p className="text-sm font-semibold text-muted-foreground">
+                    No government hospitals found nearby for this condition.
+                  </p>
+                </div>
+              )}
+            </div>
 
-          <div>
-            <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
-              <Hospital className="h-5 w-5 text-primary" strokeWidth={2.5} /> Private Hospitals
-            </h3>
-            {privateHospitals.length > 0 ? (
-              <div className="space-y-3">
-                {privateHospitals.map((h: HospitalData, idx: number) => (
-                  <HospitalCardDynamic key={idx} hospital={h} />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
-                <p className="text-sm font-semibold text-muted-foreground">
-                  No private hospitals found nearby for this condition.
-                </p>
-              </div>
-            )}
-          </div>
+            <div>
+              <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
+                <Hospital className="h-5 w-5 text-primary" strokeWidth={2.5} /> Private Hospitals
+              </h3>
+              {privateHospitals.length > 0 ? (
+                <div className="space-y-3">
+                  {privateHospitals.map((h: HospitalData, idx: number) => (
+                    <HospitalCardDynamic key={idx} hospital={h} />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
+                  <p className="text-sm font-semibold text-muted-foreground">
+                    No private hospitals found nearby for this condition.
+                  </p>
+                </div>
+              )}
+            </div>
 
-          <div>
-            <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
-              <Landmark className="h-5 w-5 text-secondary" strokeWidth={2.5} /> Government Welfare
-              Schemes
-            </h3>
-            {matchedSchemes && matchedSchemes.length > 0 ? (
-              <div className="space-y-3">
-                {matchedSchemes.map((s: Scheme, idx: number) => (
-                  <SchemeCard key={idx} scheme={s} />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
-                <p className="text-sm font-semibold text-muted-foreground">
-                  No government welfare schemes matched for this condition.
-                </p>
-              </div>
-            )}
-          </div>
+            <div>
+              <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
+                <Landmark className="h-5 w-5 text-secondary" strokeWidth={2.5} /> Government Welfare
+                Schemes
+              </h3>
+              {matchedSchemes && matchedSchemes.length > 0 ? (
+                <div className="space-y-3">
+                  {matchedSchemes.map((s: Scheme, idx: number) => (
+                    <SchemeCard key={idx} scheme={s} />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
+                  <p className="text-sm font-semibold text-muted-foreground">
+                    No government welfare schemes matched for this condition.
+                  </p>
+                </div>
+              )}
+            </div>
 
-          <div>
-            <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
-              <Activity className="h-5 w-5 text-primary" strokeWidth={2.5} /> Disease Heatmap
-            </h3>
-            {loadingHeatmap ? (
-              <div className="flex min-h-[150px] items-center justify-center rounded-2xl border-2 border-border bg-card p-5 mt-2">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : heatmapData && heatmapData.length > 0 ? (
-              <DiseaseHeatmapView
-                data={heatmapData}
-                loading={false}
-                initialDisease={report.primary_diagnosis}
-                hideCampRecommendations={true}
-              />
-            ) : (
-              <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
-                <p className="text-sm font-semibold text-muted-foreground">
-                  No outbreak data available for this condition yet
-                </p>
-              </div>
-            )}
-          </div>
-        </section>
+            <div>
+              <h3 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" strokeWidth={2.5} /> Disease Heatmap
+              </h3>
+              {loadingHeatmap ? (
+                <div className="flex min-h-[150px] items-center justify-center rounded-2xl border-2 border-border bg-card p-5 mt-2">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : heatmapData && heatmapData.length > 0 ? (
+                <DiseaseHeatmapView
+                  data={heatmapData}
+                  loading={false}
+                  initialDisease={report.primary_diagnosis}
+                  hideCampRecommendations={true}
+                />
+              ) : (
+                <div className="rounded-2xl border-2 border-border bg-card p-5 text-center mt-2">
+                  <p className="text-sm font-semibold text-muted-foreground">
+                    No outbreak data available for this condition yet
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );
